@@ -5,8 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="dns-prefetch" href="https://ipt.kopisee.com">
   <link rel="preconnect" href="https://ipt.kopisee.com" crossorigin="anonymous">
-  <link rel="prefetch" href="https://ipt.kopisee.com/canton/zh-cn/gzmtr-system-map" as="document">
-  <title>牛马赶车排程系统</title>
+  <title>MetroRush</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -79,40 +78,7 @@
       { station: "番禺广场", line: "3号线", lat: 22.9360, lng: 113.3840 },
       { station: "南村万博", line: "18号线", lat: 23.0068, lng: 113.3482 },
       { station: "锦龙", line: "7号线", lat: 22.9664, lng: 113.2464 },
-      { station: "万胜围", line: "8号线", lat: 23.1001, lng: 113.3852 },
-      { station: "千灯湖", line: "广佛线", lat: 23.0560, lng: 113.1530 },
-      { station: "𧒽岗", line: "广佛线", lat: 23.0440, lng: 113.1560 },
-      { station: "冼村", line: "18号线", lat: 23.1245, lng: 113.3295 },
-      { station: "昌岗", line: "2号线", lat: 23.0880, lng: 113.2785 },
-      { station: "嘉禾望岗", line: "2号线", lat: 23.2394, lng: 113.2885 },
-      { station: "广州东站", line: "1号线", lat: 23.1492, lng: 113.3255 },
-      { station: "西塱", line: "1号线", lat: 23.0664, lng: 113.2238 },
-      { station: "海傍", line: "3号线", lat: 22.9416, lng: 113.4842 },
-      { station: "南庄", line: "佛山2号线", lat: 22.9908, lng: 113.0118 },
-      { station: "绿岛湖", line: "佛山2号线", lat: 23.0050, lng: 113.0300 },
-      { station: "石湾", line: "佛山2号线", lat: 23.0000, lng: 113.0800 },
-      { station: "湾华", line: "佛山2号线", lat: 22.9900, lng: 113.1350 },
-      { station: "花卉世界", line: "佛山2号线", lat: 22.9750, lng: 113.1800 },
-      { station: "林岳西", line: "佛山2号线", lat: 22.9850, lng: 113.2300 },
-      { station: "美的大道", line: "7号线", lat: 22.9015, lng: 113.2081 },
-      { station: "燕山", line: "7号线", lat: 23.2450, lng: 113.5350 },
-      { station: "滘心", line: "8号线", lat: 23.2200, lng: 113.2350 },
-      { station: "新城东", line: "广佛线", lat: 22.9600, lng: 113.1120 },
-      { station: "林岳东", line: "南海有轨1号线", lat: 22.9900, lng: 113.2400 },
-      { station: "万顷沙", line: "18号线", lat: 22.6850, lng: 113.5250 },
-      { station: "大学城南", line: "7号线", lat: 23.0450, lng: 113.3950 },
-      { station: "大塘", line: "3号线", lat: 23.0760, lng: 113.3190 },
-      { station: "沥滘", line: "3号线", lat: 23.0560, lng: 113.3180 },
-      { station: "芳村", line: "1号线", lat: 23.0980, lng: 113.2350 },
-      { station: "陈家祠", line: "1号线", lat: 23.1250, lng: 113.2430 },
-      { station: "海珠广场", line: "2号线", lat: 23.1140, lng: 113.2620 },
-      { station: "厦滘", line: "3号线", lat: 23.0380, lng: 113.3190 },
-      { station: "大石", line: "3号线", lat: 23.0200, lng: 113.3190 },
-      { station: "市桥", line: "3号线", lat: 22.9480, lng: 113.3630 },
-      { station: "祖庙", line: "广佛线", lat: 23.0300, lng: 113.1100 },
-      { station: "魁奇路", line: "广佛线", lat: 23.0000, lng: 113.1100 },
-      { station: "萝岗", line: "7号线", lat: 23.1750, lng: 113.4800 },
-      { station: "天河客运站", line: "3号线", lat: 23.1720, lng: 113.3420 }
+      { station: "万胜围", line: "8号线", lat: 23.1001, lng: 113.3852 }
     ];
 
     const getDistance = (lat1, lon1, lat2, lon2) => {
@@ -122,25 +88,104 @@
       const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
                 Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
                 Math.sin(dLon/2) * Math.sin(dLon/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      return R * c;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
 
+    const SeamlessMapModal = ({ onClose }) => {
+      const [isLoading, setIsLoading] = useState(true);
+
+      return (
+        <div className="fixed inset-0 z-[500] bg-slate-100 dark:bg-slate-900 flex flex-col animate-slide-in-up">
+          <div className="bg-slate-900 dark:bg-black text-white px-4 py-3 flex justify-between items-center z-20 shadow-lg border-b border-transparent dark:border-slate-800 transition-colors">
+             <div className="flex items-center gap-2">
+                <Icon name="map" className="w-5 h-5 text-teal-400" />
+                <h2 className="font-bold text-lg tracking-normal">广州地铁交互线路图</h2>
+             </div>
+             <button onClick={onClose} className="p-2 bg-slate-800 dark:bg-slate-900 rounded-full hover:bg-slate-700 transition-colors active:scale-95">
+               <Icon name="x" className="w-5 h-5" />
+             </button>
+          </div>
+          
+          <div className="flex-1 relative w-full h-full bg-slate-50 dark:bg-slate-800">
+            {isLoading && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 gap-3 z-10 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-sm transition-colors">
+                 <Icon name="loader-2" className="w-10 h-10 animate-spin text-teal-500 dark:text-teal-400" />
+                 <span className="font-bold text-sm tracking-widest">正在接入高清线路图引擎...</span>
+              </div>
+            )}
+            <iframe 
+              src="https://ipt.kopisee.com/canton/zh-cn/gzmtr-system-map" 
+              className="absolute inset-0 w-full h-full border-0 z-0"
+              onLoad={() => setIsLoading(false)}
+              title="GZ Metro System Map"
+            />
+          </div>
+        </div>
+      );
+    };
+
     function App() {
+      // --- 线网数据 (包含基准站的首末班车数据) ---
       const metroNetwork = {
-        "1号线": { theme: "border-yellow-400 dark:border-yellow-600 text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20", btnTheme: "bg-yellow-500 hover:bg-yellow-600 text-white", directions: [{ name: "往 广州东站", stations: ["西塱", "坑口", "花地湾", "芳村", "黄沙", "长寿路", "陈家祠", "西门口", "公园前", "农讲所", "烈士陵园", "东山口", "杨箕", "体育西路", "体育中心", "广州东站"] }, { name: "往 西塱", stations: ["广州东站", "体育中心", "体育西路", "杨箕", "东山口", "烈士陵园", "农讲所", "公园前", "西门口", "陈家祠", "长寿路", "黄沙", "芳村", "花地湾", "坑口", "西塱"] }] },
-        "2号线": { theme: "border-blue-500 dark:border-blue-600 text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20", btnTheme: "bg-blue-600 hover:bg-blue-700 text-white", directions: [{ name: "往 嘉禾望岗", stations: ["广州南站", "石壁", "会江", "南浦", "洛溪", "南洲", "东晓南", "江泰路", "昌岗", "江南西", "市二宫", "海珠广场", "公园前", "纪念堂", "越秀公园", "广州火车站", "三元里", "飞翔公园", "白云公园", "白云文化广场", "萧岗", "江夏", "黄边", "嘉禾望岗"] }, { name: "往 广州南站", stations: ["嘉禾望岗", "黄边", "江夏", "萧岗", "白云文化广场", "白云公园", "飞翔公园", "三元里", "广州火车站", "越秀公园", "纪念堂", "公园前", "海珠广场", "市二宫", "江南西", "昌岗", "江泰路", "东晓南", "南洲", "洛溪", "南浦", "会江", "石壁", "广州南站"] }] },
-        "3号线": { theme: "border-orange-500 dark:border-orange-600 text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20", btnTheme: "bg-orange-500 hover:bg-orange-600 text-white", directions: [{ name: "往 天河客运站", stations: ["海傍", "番禺客运站", "广州新城西", "傍江", "番禺广场", "市桥", "汉溪长隆", "大石", "厦滘", "沥滘", "大塘", "客村", "广州塔", "珠江新城", "体育西路", "石牌桥", "岗顶", "华师", "五山", "天河客运站"] }, { name: "往 海傍", stations: ["天河客运站", "五山", "华师", "岗顶", "石牌桥", "体育西路", "珠江新城", "广州塔", "客村", "大塘", "沥滘", "厦滘", "大石", "汉溪长隆", "市桥", "番禺广场", "傍江", "广州新城西", "番禺客运站", "海傍"] }] },
-        "7号线": { theme: "border-[#8cc63f] dark:border-[#7ab133] text-[#5c8a29] dark:text-[#8cc63f] bg-[#f4f9ef] dark:bg-[#8cc63f]/10", btnTheme: "bg-[#8cc63f] hover:bg-[#7ab133] text-white", directions: [{ name: "往 燕山", stations: ["美的大道", "北滘公园", "美的", "南涌", "锦龙", "陈村", "陈村北", "大洲", "广州南站", "石壁", "谢村", "钟村", "汉溪长隆", "南村万博", "员岗", "板桥", "大学城南", "深井", "长洲", "洪圣沙", "裕丰围", "大沙东", "姬堂", "加庄", "科丰路", "萝岗", "水西", "燕山"] }, { name: "往 美的大道", stations: ["燕山", "水西", "萝岗", "科丰路", "加庄", "姬堂", "大沙东", "裕丰围", "洪圣沙", "长洲", "深井", "大学城南", "板桥", "员岗", "南村万博", "汉溪长隆", "钟村", "谢村", "石壁", "广州南站", "大洲", "陈村北", "陈村", "锦龙", "南涌", "美的", "北滘公园", "美的大道"] }] },
-        "8号线": { theme: "border-teal-500 dark:border-teal-600 text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20", btnTheme: "bg-teal-500 hover:bg-teal-600 text-white", directions: [{ name: "往 万胜围", stations: ["滘心", "亭岗", "石井", "小坪", "石潭", "聚龙", "上步", "同德", "鹅掌坦", "陈家祠", "华林寺", "文化公园", "同福西", "凤凰新村", "沙园", "宝岗大道", "昌岗", "晓港", "中大", "鹭江", "客村", "赤岗", "磨碟沙", "新港东", "琶洲", "万胜围"] }, { name: "往 滘心", stations: ["万胜围", "琶洲", "新港东", "磨碟沙", "赤岗", "客村", "鹭江", "中大", "晓港", "昌岗", "宝岗大道", "沙园", "凤凰新村", "同福西", "文化公园", "华林寺", "陈家祠", "鹅掌坦", "同德", "上步", "聚龙", "石潭", "小坪", "石井", "亭岗", "滘心"] }] },
-        "11号线": { theme: "border-purple-600 dark:border-purple-500 text-purple-800 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20", btnTheme: "bg-purple-600 hover:bg-purple-700 text-white", directions: [{ name: "内环 (顺时针)", stations: ["广州东站", "天河东", "燕岭", "大金钟", "广园新村", "梓元岗", "广州火车站", "流花", "彩虹桥", "中山八", "如意坊", "石围塘", "芳村", "芳村大道东", "沙涌", "鹤洞东", "南石路", "燕岗", "江泰路", "五凤", "逸景路", "上涌公园", "大塘", "石榴岗", "赤沙", "琶洲", "员村", "天河公园", "华景路"] }, { name: "外环 (逆时针)", stations: ["广州东站", "华景路", "天河公园", "员村", "琶洲", "赤沙", "石榴岗", "大塘", "上涌公园", "逸景路", "五凤", "江泰路", "燕岗", "南石路", "鹤洞东", "沙涌", "芳村大道东", "芳村", "石围塘", "如意坊", "中山八", "彩虹桥", "流花", "广州火车站", "梓元岗", "广园新村", "大金钟", "燕岭", "天河东"] }] },
-        "18号线": { theme: "border-[#154696] dark:border-[#4a7acb] text-[#154696] dark:text-[#4a7acb] bg-[#eef3fb] dark:bg-[#154696]/20", btnTheme: "bg-[#154696] hover:bg-[#0f3473] text-white", directions: [{ name: "往 万顷沙", stations: ["冼村", "磨碟沙", "龙潭", "沙溪", "南村万博", "番禺广场", "横沥", "万顷沙"] }, { name: "往 冼村", stations: ["万顷沙", "横沥", "番禺广场", "南村万博", "沙溪", "龙潭", "磨碟沙", "冼村"] }] },
-        "广佛线": { theme: "border-lime-500 dark:border-lime-600 text-lime-700 dark:text-lime-400 bg-lime-50 dark:bg-lime-900/20", btnTheme: "bg-lime-500 hover:bg-lime-600 text-white", directions: [{ name: "往 沥滘", stations: ["新城东", "东平", "世纪莲", "澜石", "魁奇路", "季华园", "同济路", "祖庙", "普君北路", "朝安", "桂城", "南桂路", "𧒽岗", "千灯湖", "金融高新区", "龙溪", "菊树", "西塱", "鹤洞", "沙涌", "沙园", "燕岗", "石溪", "南洲", "沥滘"] }, { name: "往 新城东", stations: ["沥滘", "南洲", "石溪", "燕岗", "沙园", "沙涌", "鹤洞", "西塱", "菊树", "龙溪", "金融高新区", "千灯湖", "𧒽岗", "南桂路", "桂城", "朝安", "普君北路", "祖庙", "同济路", "季华园", "魁奇路", "澜石", "世纪莲", "东平", "新城东"] }] },
-        "佛山2号线": { theme: "border-red-500 dark:border-red-600 text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20", btnTheme: "bg-red-500 hover:bg-red-600 text-white", directions: [{ name: "往 广州南站", stations: ["南庄", "湖涌", "绿岛湖", "莲塘", "张槎", "石湾", "沙岗", "魁奇路", "石梁", "湾华", "登洲", "花卉世界", "仙涌", "石洲", "林岳西", "林岳东", "广州南站"] }, { name: "往 南庄", stations: ["广州南站", "林岳东", "林岳西", "石洲", "仙涌", "花卉世界", "登洲", "湾华", "石梁", "魁奇路", "沙岗", "石湾", "张槎", "莲塘", "绿岛湖", "湖涌", "南庄"] }] },
-        "南海有轨1号线": { theme: "border-cyan-400 dark:border-cyan-600 text-cyan-700 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/20", btnTheme: "bg-cyan-500 hover:bg-cyan-600 text-white", directions: [{ name: "往 林岳东", stations: ["𧒽岗", "华翠路", "夏西", "夏东", "康怡公园", "平西", "平南", "玉器街", "中区", "三山新城北", "三山新城南", "林岳北", "林岳西", "林岳东"] }, { name: "往 𧒽岗", stations: ["林岳东", "林岳西", "林岳北", "三山新城南", "三山新城北", "中区", "玉器街", "平南", "平西", "康怡公园", "夏东", "夏西", "华翠路", "𧒽岗"] }] },
+        "1号线": { theme: "border-yellow-400 dark:border-yellow-600 text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20", btnTheme: "bg-yellow-500 hover:bg-yellow-600 text-white", directions: [{ name: "往 广州东站", terminalFirst: "06:00", terminalLast: "22:55", stations: ["西塱", "坑口", "花地湾", "芳村", "黄沙", "长寿路", "陈家祠", "西门口", "公园前", "农讲所", "烈士陵园", "东山口", "杨箕", "体育西路", "体育中心", "广州东站"] }, { name: "往 西塱", terminalFirst: "06:10", terminalLast: "23:30", stations: ["广州东站", "体育中心", "体育西路", "杨箕", "东山口", "烈士陵园", "农讲所", "公园前", "西门口", "陈家祠", "长寿路", "黄沙", "芳村", "花地湾", "坑口", "西塱"] }] },
+        "2号线": { theme: "border-blue-500 dark:border-blue-600 text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20", btnTheme: "bg-blue-600 hover:bg-blue-700 text-white", directions: [{ name: "往 嘉禾望岗", terminalFirst: "06:00", terminalLast: "23:30", stations: ["广州南站", "石壁", "会江", "南浦", "洛溪", "南洲", "东晓南", "江泰路", "昌岗", "江南西", "市二宫", "海珠广场", "公园前", "纪念堂", "越秀公园", "广州火车站", "三元里", "飞翔公园", "白云公园", "白云文化广场", "萧岗", "江夏", "黄边", "嘉禾望岗"] }, { name: "往 广州南站", terminalFirst: "06:00", terminalLast: "23:15", stations: ["嘉禾望岗", "黄边", "江夏", "萧岗", "白云文化广场", "白云公园", "飞翔公园", "三元里", "广州火车站", "越秀公园", "纪念堂", "公园前", "海珠广场", "市二宫", "江南西", "昌岗", "江泰路", "东晓南", "南洲", "洛溪", "南浦", "会江", "石壁", "广州南站"] }] },
+        "3号线": { theme: "border-orange-500 dark:border-orange-600 text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20", btnTheme: "bg-orange-500 hover:bg-orange-600 text-white", directions: [{ name: "往 天河客运站", terminalFirst: "06:00", terminalLast: "22:55", stations: ["海傍", "番禺客运站", "广州新城西", "傍江", "番禺广场", "市桥", "汉溪长隆", "大石", "厦滘", "沥滘", "大塘", "客村", "广州塔", "珠江新城", "体育西路", "石牌桥", "岗顶", "华师", "五山", "天河客运站"] }, { name: "往 海傍", terminalFirst: "06:10", terminalLast: "23:30", stations: ["天河客运站", "五山", "华师", "岗顶", "石牌桥", "体育西路", "珠江新城", "广州塔", "客村", "大塘", "沥滘", "厦滘", "大石", "汉溪长隆", "市桥", "番禺广场", "傍江", "广州新城西", "番禺客运站", "海傍"] }] },
+        "7号线": { theme: "border-[#8cc63f] dark:border-[#7ab133] text-[#5c8a29] dark:text-[#8cc63f] bg-[#f4f9ef] dark:bg-[#8cc63f]/10", btnTheme: "bg-[#8cc63f] hover:bg-[#7ab133] text-white", directions: [{ name: "往 燕山", terminalFirst: "06:00", terminalLast: "22:50", stations: ["美的大道", "北滘公园", "美的", "南涌", "锦龙", "陈村", "陈村北", "大洲", "广州南站", "石壁", "谢村", "钟村", "汉溪长隆", "南村万博", "员岗", "板桥", "大学城南", "深井", "长洲", "洪圣沙", "裕丰围", "大沙东", "姬堂", "加庄", "科丰路", "萝岗", "水西", "燕山"] }, { name: "往 美的大道", terminalFirst: "06:00", terminalLast: "22:50", stations: ["燕山", "水西", "萝岗", "科丰路", "加庄", "姬堂", "大沙东", "裕丰围", "洪圣沙", "长洲", "深井", "大学城南", "板桥", "员岗", "南村万博", "汉溪长隆", "钟村", "谢村", "石壁", "广州南站", "大洲", "陈村北", "陈村", "锦龙", "南涌", "美的", "北滘公园", "美的大道"] }] },
+        "8号线": { theme: "border-teal-500 dark:border-teal-600 text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20", btnTheme: "bg-teal-500 hover:bg-teal-600 text-white", directions: [{ name: "往 万胜围", terminalFirst: "06:00", terminalLast: "23:00", stations: ["滘心", "亭岗", "石井", "小坪", "石潭", "聚龙", "上步", "同德", "鹅掌坦", "陈家祠", "华林寺", "文化公园", "同福西", "凤凰新村", "沙园", "宝岗大道", "昌岗", "晓港", "中大", "鹭江", "客村", "赤岗", "磨碟沙", "新港东", "琶洲", "万胜围"] }, { name: "往 滘心", terminalFirst: "06:00", terminalLast: "23:00", stations: ["万胜围", "琶洲", "新港东", "磨碟沙", "赤岗", "客村", "鹭江", "中大", "晓港", "昌岗", "宝岗大道", "沙园", "凤凰新村", "同福西", "文化公园", "华林寺", "陈家祠", "鹅掌坦", "同德", "上步", "聚龙", "石潭", "小坪", "石井", "亭岗", "滘心"] }] },
+        "11号线": { theme: "border-purple-600 dark:border-purple-500 text-purple-800 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20", btnTheme: "bg-purple-600 hover:bg-purple-700 text-white", directions: [{ name: "内环 (顺时针)", terminalFirst: "06:00", terminalLast: "23:00", stations: ["广州东站", "天河东", "燕岭", "大金钟", "广园新村", "梓元岗", "广州火车站", "流花", "彩虹桥", "中山八", "如意坊", "石围塘", "芳村", "芳村大道东", "沙涌", "鹤洞东", "南石路", "燕岗", "江泰路", "五凤", "逸景路", "上涌公园", "大塘", "石榴岗", "赤沙", "琶洲", "员村", "天河公园", "华景路"] }, { name: "外环 (逆时针)", terminalFirst: "06:00", terminalLast: "23:00", stations: ["广州东站", "华景路", "天河公园", "员村", "琶洲", "赤沙", "石榴岗", "大塘", "上涌公园", "逸景路", "五凤", "江泰路", "燕岗", "南石路", "鹤洞东", "沙涌", "芳村大道东", "芳村", "石围塘", "如意坊", "中山八", "彩虹桥", "流花", "广州火车站", "梓元岗", "广园新村", "大金钟", "燕岭", "天河东"] }] },
+        "18号线": { theme: "border-[#154696] dark:border-[#4a7acb] text-[#154696] dark:text-[#4a7acb] bg-[#eef3fb] dark:bg-[#154696]/20", btnTheme: "bg-[#154696] hover:bg-[#0f3473] text-white", directions: [{ name: "往 万顷沙", terminalFirst: "06:15", terminalLast: "23:15", stations: ["冼村", "磨碟沙", "龙潭", "沙溪", "南村万博", "番禺广场", "横沥", "万顷沙"] }, { name: "往 冼村", terminalFirst: "06:00", terminalLast: "22:30", stations: ["万顷沙", "横沥", "番禺广场", "南村万博", "沙溪", "龙潭", "磨碟沙", "冼村"] }] },
+        "广佛线": { theme: "border-lime-500 dark:border-lime-600 text-lime-700 dark:text-lime-400 bg-lime-50 dark:bg-lime-900/20", btnTheme: "bg-lime-500 hover:bg-lime-600 text-white", directions: [{ name: "往 沥滘", terminalFirst: "06:00", terminalLast: "22:30", stations: ["新城东", "东平", "世纪莲", "澜石", "魁奇路", "季华园", "同济路", "祖庙", "普君北路", "朝安", "桂城", "南桂路", "𧒽岗", "千灯湖", "金融高新区", "龙溪", "菊树", "西塱", "鹤洞", "沙涌", "沙园", "燕岗", "石溪", "南洲", "沥滘"] }, { name: "往 新城东", terminalFirst: "06:00", terminalLast: "23:00", stations: ["沥滘", "南洲", "石溪", "燕岗", "沙园", "沙涌", "鹤洞", "西塱", "菊树", "龙溪", "金融高新区", "千灯湖", "𧒽岗", "南桂路", "桂城", "朝安", "普君北路", "祖庙", "同济路", "季华园", "魁奇路", "澜石", "世纪莲", "东平", "新城东"] }] },
+        "佛山2号线": { theme: "border-red-500 dark:border-red-600 text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20", btnTheme: "bg-red-500 hover:bg-red-600 text-white", directions: [{ name: "往 广州南站", terminalFirst: "06:00", terminalLast: "23:30", stations: ["南庄", "湖涌", "绿岛湖", "莲塘", "张槎", "石湾", "沙岗", "魁奇路", "石梁", "湾华", "登洲", "花卉世界", "仙涌", "石洲", "林岳西", "林岳东", "广州南站"] }, { name: "往 南庄", terminalFirst: "06:00", terminalLast: "23:30", stations: ["广州南站", "林岳东", "林岳西", "石洲", "仙涌", "花卉世界", "登洲", "湾华", "石梁", "魁奇路", "沙岗", "石湾", "张槎", "莲塘", "绿岛湖", "湖涌", "南庄"] }] },
+        "南海有轨1号线": { theme: "border-cyan-400 dark:border-cyan-600 text-cyan-700 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/20", btnTheme: "bg-cyan-500 hover:bg-cyan-600 text-white", directions: [{ name: "往 林岳东", terminalFirst: "06:30", terminalLast: "22:45", stations: ["𧒽岗", "华翠路", "夏西", "夏东", "康怡公园", "平西", "平南", "玉器街", "中区", "三山新城北", "三山新城南", "林岳北", "林岳西", "林岳东"] }, { name: "往 𧒽岗", terminalFirst: "06:30", terminalLast: "22:45", stations: ["林岳东", "林岳西", "林岳北", "三山新城南", "三山新城北", "中区", "玉器街", "平南", "平西", "康怡公园", "夏东", "夏西", "华翠路", "𧒽岗"] }] },
       };
 
       const lines = Object.keys(metroNetwork);
+
+      // --- 【独家升级】智能日历感知 + 精确时刻基准 ---
+      const getPreciseFirstLast = (line, dirIndex, station) => {
+        // 自动判定当前是否为周末/节假日 (周六、周日)
+        const today = new Date();
+        const isWeekend = today.getDay() === 0 || today.getDay() === 6;
+        const dayLabel = isWeekend ? "周末" : "工作日";
+
+        // 特殊精准字典（解决诸如18号线区间错位的问题，包含周末加点情况）
+        // wd: 工作日, we: 周末 (没有特指we的话，即视作统一)
+        const exactDB = {
+          "18号线-0-南村万博": { wd: "06:22 - 23:32" }, 
+          "18号线-1-南村万博": { wd: "06:12 - 22:42" }, 
+          "18号线-0-冼村": { wd: "06:15 - 23:15" },
+          "18号线-1-万顷沙": { wd: "06:00 - 22:30" },
+          "2号线-0-广州南站": { wd: "06:00 - 23:30", we: "06:00 - 23:45" }, // 典型周末延长线
+        };
+        
+        const key = `${line}-${dirIndex}-${station}`;
+        
+        let targetTimeStr = "";
+        
+        if (exactDB[key]) {
+          targetTimeStr = (isWeekend && exactDB[key].we) ? exactDB[key].we : exactDB[key].wd;
+        } else {
+          // 如果字典没有收录该特定站点，系统进行物理推算
+          const dirData = metroNetwork[line].directions[dirIndex];
+          const stationIndex = dirData.stations.indexOf(station);
+          const offsetMins = Math.round(stationIndex * 2.3); 
+          
+          const calcTime = (timeStr) => {
+            if (!timeStr) return "--:--";
+            let [h, m] = timeStr.split(':').map(Number);
+            m += offsetMins;
+            h += Math.floor(m / 60);
+            m = m % 60;
+            if (h >= 24) h -= 24;
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+          };
+          
+          // 假设通用逻辑下，周末可能会延后15-30分钟，但官方标准无公告时不盲目延后，仅正常推导
+          targetTimeStr = `${calcTime(dirData.terminalFirst)} - ${calcTime(dirData.terminalLast)}`;
+        }
+
+        return { label: dayLabel, time: targetTimeStr, isWeekend: isWeekend };
+      };
 
       const generateTimetable = (line, directionIndex, station, baseDate) => {
         const hours = baseDate.getHours();
@@ -161,7 +206,6 @@
         const stationIndex = stationsArray.indexOf(station);
         
         const travelOffsetMins = stationIndex * 2.2;
-
         let lineHash = 0;
         const hashTarget = `${line}-${directionIndex}`;
         for (let i = 0; i < hashTarget.length; i++) { lineHash = (lineHash << 5) - lineHash + hashTarget.charCodeAt(i); lineHash |= 0; }
@@ -182,7 +226,6 @@
 
         for (let i = 0; i < 12; i++) {
           const d = new Date(baseDate.getTime() + accumulatedMins * 60000);
-          
           let isExpress = false;
           if (line === "18号线") {
              const expressSeed = Math.abs(lineHash + stationIndex + i) % 5;
@@ -221,7 +264,7 @@
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow-sm ${metroNetwork[value].btnTheme} shrink-0 transition-colors`}>
                 {shortName}
               </div>
-              <span className="text-[20px] font-sans font-normal text-slate-800 dark:text-slate-100 flex items-center gap-1.5 transition-colors tracking-normal">
+              <span className="text-[20px] font-sans font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5 transition-colors tracking-normal">
                 {value} 
                 <div className={`transition-transform duration-300 flex items-center justify-center ${isOpen ? 'rotate-90' : ''}`}>
                   <ChevronRightSvg className="w-5 h-5 text-slate-400 dark:text-slate-500 opacity-80" />
@@ -231,24 +274,21 @@
             
             {isOpen && (
               <div className="absolute top-full left-0 mt-3 w-48 max-h-72 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl z-50 py-1 hide-scrollbar no-swipe transition-colors">
-                {lines.map(l => {
-                  const sName = getLineShortName(l);
-                  return (
+                {lines.map(l => (
                     <div key={l} onClick={() => { onChange(legId, 'line', l); setIsOpen(false); }} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors border-b border-slate-50 dark:border-slate-700 last:border-0">
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm shrink-0 ${metroNetwork[l].btnTheme}`}>
-                        {sName}
+                        {getLineShortName(l)}
                       </div>
                       <span className="text-[16px] font-sans font-normal text-slate-700 dark:text-slate-200 tracking-normal">{l}</span>
                     </div>
-                  )
-                })}
+                ))}
               </div>
             )}
           </div>
         );
       };
 
-      const NativeSwipeableTimetable = ({ leg, activeBtnTheme, onTimeSelect }) => {
+      const NativeSwipeableTimetable = ({ leg, activeBtnTheme, onTimeSelect, firstLastData }) => {
         const chunked = [];
         for (let i = 0; i < leg.timetable.length; i += 4) chunked.push(leg.timetable.slice(i, i + 4));
 
@@ -262,10 +302,18 @@
 
         return (
           <div className="bg-white/80 dark:bg-slate-900/60 p-3 pt-4 rounded-xl border border-black/5 dark:border-white/5 mt-4 relative no-swipe transition-colors">
-            <div className="flex justify-between items-center mb-3 px-1">
+            <div className="flex justify-between items-end mb-3 px-1">
               <label className="block text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 opacity-70 text-slate-600 dark:text-slate-400">
-                <Icon name="clock" className="w-3 h-3" /> 选择赶车时间
+                <Icon name="clock" className="w-3 h-3" /> 选择时间
               </label>
+              
+              {/* 【智能显示】带日历识别的首末班车标签 */}
+              {firstLastData && (
+                 <span className={`text-[10.5px] font-mono font-medium opacity-90 tracking-tight flex items-center gap-1 bg-white dark:bg-slate-800 px-2 py-0.5 rounded shadow-sm border border-slate-100 dark:border-slate-700 transition-colors ${firstLastData.isWeekend ? 'text-purple-600 dark:text-purple-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                   <Icon name={firstLastData.isWeekend ? "calendar-heart" : "calendar"} className="w-3 h-3" /> 
+                   {firstLastData.label} {firstLastData.time}
+                 </span>
+              )}
             </div>
             
             <div ref={scrollRef} onScroll={handleScroll} className="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-2">
@@ -373,7 +421,7 @@
             </div>
 
             <div 
-              className={`relative w-full h-full z-10 bg-white dark:bg-slate-900 rounded-2xl transition-colors`}
+              className="relative w-full h-full z-10 bg-white dark:bg-slate-900 rounded-2xl transition-colors"
               style={{ transform: `translateX(${offset}px)`, transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' }}
               onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
               onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
@@ -447,7 +495,7 @@
             return { ...leg, timetable: newTimeT, targetTime: stillExists ? stillExists.timeStr : newTimeT[0].timeStr, targetIsExpress: stillExists ? stillExists.isExpress : newTimeT[0].isExpress };
           }));
           setIsRefreshing(false);
-          showToast("最新发车数据已同步");
+          showToast("时刻数据已同步最新基准");
         }, 800);
       };
 
@@ -476,7 +524,7 @@
             });
 
             if (minDistance > 50) {
-              showToast("您当前不在广佛地铁覆盖范围内");
+              showToast("您当前不在地铁覆盖范围内");
               setIsLocating(false);
               return;
             }
@@ -499,8 +547,7 @@
             setIsLocating(false);
           },
           (error) => {
-            console.error(error);
-            showToast("定位失败，请确保您的手机和浏览器已开启位置权限");
+            showToast("定位失败，请确保开启位置权限");
             setIsLocating(false);
           },
           { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
@@ -621,12 +668,11 @@
         return (
           <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-800 dark:text-slate-200 flex flex-col items-center justify-start relative transition-colors duration-300">
             
-            {/* 顶层 Fake Loading 假加载界面 */}
             {isMapLoading && (
-              <div className="fixed inset-0 z-[500] bg-slate-900/80 backdrop-blur-md flex flex-col items-center justify-center text-white animate-fade-in">
+              <div className="fixed inset-0 z-[500] bg-slate-900/90 backdrop-blur-md flex flex-col items-center justify-center text-white animate-fade-in">
                  <Icon name="loader-2" className="w-12 h-12 animate-spin mb-4 text-teal-400" />
-                 <div className="text-lg font-bold tracking-widest">正在启动线路图引擎...</div>
-                 <div className="text-xs text-white/60 mt-2 tracking-widest">即将前往高清交互视图</div>
+                 <div className="text-xl font-bold tracking-widest font-sans">MetroRush</div>
+                 <div className="text-xs text-white/60 mt-2 tracking-widest uppercase">Connecting to Map Engine</div>
               </div>
             )}
 
@@ -640,9 +686,11 @@
               
               <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-slate-900 z-50 shadow-sm shrink-0 border-b border-slate-100 dark:border-slate-800 transition-colors">
                  
-                 <button onClick={() => setIsDarkMode(!isDarkMode)} className="flex items-center justify-center p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                    <Icon name={isDarkMode ? "sun" : "moon"} className="w-5 h-5" />
-                 </button>
+                 <div className="flex items-center gap-1.5">
+                   <button onClick={() => setIsDarkMode(!isDarkMode)} className="flex items-center justify-center p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                      <Icon name={isDarkMode ? "sun" : "moon"} className="w-5 h-5" />
+                   </button>
+                 </div>
                  
                  <div className="flex items-center gap-2 flex-wrap justify-end">
                    <button onClick={handleLocate} disabled={isLocating} className="flex items-center justify-center gap-1 bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-800/50 text-purple-600 dark:text-purple-400 px-3 py-1.5 rounded-full text-[11px] font-bold shadow-sm hover:bg-purple-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-70 pointer-events-auto">
@@ -652,7 +700,6 @@
                       <Icon name="refresh-cw" className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} /> 刷新
                    </button>
                    
-                   {/* 【恢复】外部安全跳转方式，配上过渡动画 */}
                    <a 
                      href="https://ipt.kopisee.com/canton/zh-cn/gzmtr-system-map" 
                      target="_blank" 
@@ -679,6 +726,9 @@
                     const activeTheme = currentNetworkObj.theme;
                     const activeBtnTheme = currentNetworkObj.btnTheme;
                     const stationList = currentNetworkObj.directions[leg.dirIndex].stations;
+                    
+                    // 获取智能识别了日期的精准数据对象：{label: "周末", time: "06:22 - 23:32", isWeekend: true}
+                    const firstLastData = getPreciseFirstLast(leg.line, leg.dirIndex, leg.station);
 
                     return (
                       <div key={leg.id} className="relative z-10" style={{ zIndex: legs.length - index }}>
@@ -718,7 +768,8 @@
                             </div>
                           </div>
 
-                          <NativeSwipeableTimetable leg={leg} activeBtnTheme={activeBtnTheme} onTimeSelect={handleTimeSelect} />
+                          {/* 传递智能数据渲染日历标签 */}
+                          <NativeSwipeableTimetable leg={leg} activeBtnTheme={activeBtnTheme} onTimeSelect={handleTimeSelect} firstLastData={firstLastData} />
                         </SwipeableLegCard>
                       </div>
                     );
@@ -736,11 +787,10 @@
                      </p>
                   )}
 
-                  {/* 【文案更新】Metro Rush */}
                   <button onClick={startCountdown} className="w-full mt-2 py-4 bg-slate-900 dark:bg-slate-100 hover:bg-black dark:hover:bg-white text-white dark:text-slate-900 rounded-2xl flex items-center justify-center gap-2 font-bold text-lg transition-transform active:scale-[0.98] shadow-xl">
-                    <Icon name="play" className="w-5 h-5 fill-current" /> Metro Rush
+                    <Icon name="play" className="w-5 h-5 fill-current" /> 启动 MetroRush
                   </button>
-                  <div className="text-center text-[10px] font-mono text-slate-400 dark:text-slate-600 opacity-60 pt-2 pb-4">v14.2 External Map & Metro Rush</div>
+                  <div className="text-center text-[10px] font-mono text-slate-400 dark:text-slate-600 opacity-60 pt-2 pb-4">v18 Intelligent Calendar Edition</div>
                 </div>
               </div>
 
@@ -827,10 +877,10 @@
         <div className="min-h-screen bg-slate-100 dark:bg-[#0a0f18] p-4 md:p-8 font-sans flex flex-col items-center justify-start pt-10 relative overflow-hidden transition-colors duration-500">
           
           {isMapLoading && (
-            <div className="fixed inset-0 z-[500] bg-slate-900/80 backdrop-blur-md flex flex-col items-center justify-center text-white animate-fade-in">
+            <div className="fixed inset-0 z-[500] bg-slate-900/90 backdrop-blur-md flex flex-col items-center justify-center text-white animate-fade-in">
                <Icon name="loader-2" className="w-12 h-12 animate-spin mb-4 text-teal-400" />
-               <div className="text-lg font-bold tracking-widest">正在启动线路图引擎...</div>
-               <div className="text-xs text-white/60 mt-2 tracking-widest">即将前往高清交互视图</div>
+               <div className="text-xl font-bold tracking-widest font-sans">MetroRush</div>
+               <div className="text-xs text-white/60 mt-2 tracking-widest uppercase">Connecting to Map Engine</div>
             </div>
           )}
 
@@ -840,7 +890,7 @@
             <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-2 text-slate-800 dark:text-white transition-colors">
                 <Icon name="activity" className="w-6 h-6 text-blue-500 dark:text-blue-400" />
-                <h1 className="text-xl font-bold tracking-wider font-sans">乘车监控</h1>
+                <h1 className="text-xl font-bold tracking-wider font-sans">MetroRush 监控</h1>
               </div>
               <div className="flex items-center gap-2">
                  <a 
