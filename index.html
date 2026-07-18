@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="dns-prefetch" href="https://ipt.kopisee.com">
+  <link rel="preconnect" href="https://ipt.kopisee.com" crossorigin="anonymous">
+  <title>牛马赶车排程系统</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    * { -webkit-tap-highlight-color: transparent; }
+    
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.15s ease-out forwards; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // --- 图标组件 ---
+    const Icon = ({ name, className }) => {
+      const iconRef = useRef(null);
+      useEffect(() => {
+        if (iconRef.current) {
+          lucide.createIcons({
+            icons: { [name]: lucide.icons[name] },
+            nameAttr: 'data-lucide',
+            attrs: { class: className }
+          });
+        }
+      }, [name, className]);
+      return <i ref={iconRef} data-lucide={name}></i>;
+    };
+
+    const ChevronRightSvg = ({ className }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M9 18l6-6-6-6"/>
+      </svg>
+    );
+
+    const getLineShortName = (lineName) => {
+      if (lineName.includes("广佛")) return "广佛";
+      if (lineName.includes("有轨")) return "南海"; 
+      if (lineName.includes("佛山")) return "佛2"; 
+      return lineName.replace("号线", "");
+    };
+
+    // --- 高精度骨干车站经纬度坐标库 ---
+    const stationCoordinates = [
+      { station: "体育西路", line: "1号线", lat: 23.1315, lng: 113.3204 },
+      { station: "珠江新城", line: "3号线", lat: 23.1193, lng: 113.3212 },
+      { station: "公园前", line: "2号线", lat: 23.1251, lng: 113.2599 },
+      { station: "广州火车站", line: "2号线", lat: 23.1495, lng: 113.2585 },
+      { station: "广州南站", line: "2号线", lat: 22.9885, lng: 113.2662 },
+      { station: "客村", line: "3号线", lat: 23.0955, lng: 113.3195 },
+      { station: "汉溪长隆", line: "3号线", lat: 22.9935, lng: 113.3305 },
+      { station: "番禺广场", line: "3号线", lat: 22.9360, lng: 113.3840 },
+      { station: "南村万博", line: "18号线", lat: 23.0068, lng: 113.3482 },
+      { station: "锦龙", line: "7号线", lat: 22.9664, lng: 113.2464 },
+      { station: "万胜围", line: "8号线", lat: 23.1001, lng: 113.3852 },
+      { station: "千灯湖", line: "广佛线", lat: 23.0560, lng: 113.1530 },
+      { station: "𧒽岗", line: "广佛线", lat: 23.0440, lng: 113.1560 },
+      { station: "冼村", line: "18号线", lat: 23.1245, lng: 113.3295 },
+      { station: "昌岗", line: "2号线", lat: 23.0880, lng: 113.2785 },
+      { station: "嘉禾望岗", line: "2号线", lat: 23.2394, lng: 113.2885 },
+      { station: "广州东站", line: "1号线", lat: 23.1492, lng: 113.3255 },
+      { station: "西塱", line: "1号线", lat: 23.0664, lng: 113.2238 },
+      { station: "海傍", line: "3号线", lat: 22.9416, lng: 113.4842 },
+      { station: "南庄", line: "佛山2号线", lat: 22.9908, lng: 113.0118 },
+      { station: "绿岛湖", line: "佛山2号线", lat: 23.0050, lng: 113.0300 },
+      { station: "石湾", line: "佛山2号线", lat: 23.0000, lng: 113.0800 },
+      { station: "湾华", line: "佛山2号线", lat: 22.9900, lng: 113.1350 },
+      { station: "花卉世界", line: "佛山2号线", lat: 22.9750, lng: 113.1800 },
+      { station: "林岳西", line: "佛山2号线", lat: 22.9850, lng: 113.2300 },
+      { station: "美的大道", line: "7号线", lat: 22.9015, lng: 113.2081 },
+      { station: "燕山", line: "7号线", lat: 23.2450, lng: 113.5350 },
+      { station: "滘心", line: "8号线", lat: 23.2200, lng: 113.2350 },
+      { station: "新城东", line: "广佛线", lat: 22.9600, lng: 113.1120 },
+      { station: "林岳东", line: "南海有轨1号线", lat: 22.9900, lng: 113.2400 },
+      { station: "万顷沙", line: "18号线", lat: 22.6850, lng: 113.5250 },
+      { station: "大学城南", line: "7号线", lat: 23.0450, lng: 113.3950 },
+      { station: "大塘", line: "3号线", lat: 23.0760, lng: 113.3190 },
+      { station: "沥滘", line: "3号线", lat: 23.0560, lng: 113.3180 },
+      { station: "芳村", line: "1号线", lat: 23.0980, lng: 113.2350 },
+      { station: "陈家祠", line: "1号线", lat: 23.1250, lng: 113.2430 },
+      { station: "海珠广场", line: "2号线", lat: 23.1140, lng: 113.2620 },
+      { station: "厦滘", line: "3号线", lat: 23.0380, lng: 113.3190 },
+      { station: "大石", line: "3号线", lat: 23.0200, lng: 113.3190 },
+      { station: "市桥", line: "3号线", lat: 22.9480, lng: 113.3630 },
+      { station: "祖庙", line: "广佛线", lat: 23.0300, lng: 113.1100 },
+      { station: "魁奇路", line: "广佛线", lat: 23.0000, lng: 113.1100 },
+      { station: "萝岗", line: "7号线", lat: 23.1750, lng: 113.4800 },
+      { station: "天河客运站", line: "3号线", lat: 23.1720, lng: 113.3420 }
+    ];
+
+    const getDistance = (lat1, lon1, lat2, lon2) => {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+
+    function App() {
+      // --- 线网数据 ---
+      const metroNetwork = {
+        "1号线": { theme: "border-yellow-400 text-yellow-600 bg-yellow-50", btnTheme: "bg-yellow-500 hover:bg-yellow-600 text-white", directions: [{ name: "往 广州东站", stations: ["西塱", "坑口", "花地湾", "芳村", "黄沙", "长寿路", "陈家祠", "西门口", "公园前", "农讲所", "烈士陵园", "东山口", "杨箕", "体育西路", "体育中心", "广州东站"] }, { name: "往 西塱", stations: ["广州东站", "体育中心", "体育西路", "杨箕", "东山口", "烈士陵园", "农讲所", "公园前", "西门口", "陈家祠", "长寿路", "黄沙", "芳村", "花地湾", "坑口", "西塱"] }] },
+        "2号线": { theme: "border-blue-500 text-blue-700 bg-blue-50", btnTheme: "bg-blue-600 hover:bg-blue-700 text-white", directions: [{ name: "往 嘉禾望岗", stations: ["广州南站", "石壁", "会江", "南浦", "洛溪", "南洲", "东晓南", "江泰路", "昌岗", "江南西", "市二宫", "海珠广场", "公园前", "纪念堂", "越秀公园", "广州火车站", "三元里", "飞翔公园", "白云公园", "白云文化广场", "萧岗", "江夏", "黄边", "嘉禾望岗"] }, { name: "往 广州南站", stations: ["嘉禾望岗", "黄边", "江夏", "萧岗", "白云文化广场", "白云公园", "飞翔公园", "三元里", "广州火车站", "越秀公园", "纪念堂", "公园前", "海珠广场", "市二宫", "江南西", "昌岗", "江泰路", "东晓南", "南洲", "洛溪", "南浦", "会江", "石壁", "广州南站"] }] },
+        "3号线": { theme: "border-orange-500 text-orange-700 bg-orange-50", btnTheme: "bg-orange-500 hover:bg-orange-600 text-white", directions: [{ name: "往 天河客运站", stations: ["海傍", "番禺客运站", "广州新城西", "傍江", "番禺广场", "市桥", "汉溪长隆", "大石", "厦滘", "沥滘", "大塘", "客村", "广州塔", "珠江新城", "体育西路", "石牌桥", "岗顶", "华师", "五山", "天河客运站"] }, { name: "往 海傍", stations: ["天河客运站", "五山", "华师", "岗顶", "石牌桥", "体育西路", "珠江新城", "广州塔", "客村", "大塘", "沥滘", "厦滘", "大石", "汉溪长隆", "市桥", "番禺广场", "傍江", "广州新城西", "番禺客运站", "海傍"] }] },
+        "7号线": { theme: "border-[#8cc63f] text-[#5c8a29] bg-[#f4f9ef]", btnTheme: "bg-[#8cc63f] hover:bg-[#7ab133] text-white", directions: [{ name: "往 燕山", stations: ["美的大道", "北滘公园", "美的", "南涌", "锦龙", "陈村", "陈村北", "大洲", "广州南站", "石壁", "谢村", "钟村", "汉溪长隆", "南村万博", "员岗", "板桥", "大学城南", "深井", "长洲", "洪圣沙", "裕丰围", "大沙东", "姬堂", "加庄", "科丰路", "萝岗", "水西", "燕山"] }, { name: "往 美的大道", stations: ["燕山", "水西", "萝岗", "科丰路", "加庄", "姬堂", "大沙东", "裕丰围", "洪圣沙", "长洲", "深井", "大学城南", "板桥", "员岗", "南村万博", "汉溪长隆", "钟村", "谢村", "石壁", "广州南站", "大洲", "陈村北", "陈村", "锦龙", "南涌", "美的", "北滘公园", "美的大道"] }] },
+        "8号线": { theme: "border-teal-500 text-teal-700 bg-teal-50", btnTheme: "bg-teal-500 hover:bg-teal-600 text-white", directions: [{ name: "往 万胜围", stations: ["滘心", "亭岗", "石井", "小坪", "石潭", "聚龙", "上步", "同德", "鹅掌坦", "陈家祠", "华林寺", "文化公园", "同福西", "凤凰新村", "沙园", "宝岗大道", "昌岗", "晓港", "中大", "鹭江", "客村", "赤岗", "磨碟沙", "新港东", "琶洲", "万胜围"] }, { name: "往 滘心", stations: ["万胜围", "琶洲", "新港东", "磨碟沙", "赤岗", "客村", "鹭江", "中大", "晓港", "昌岗", "宝岗大道", "沙园", "凤凰新村", "同福西", "文化公园", "华林寺", "陈家祠", "鹅掌坦", "同德", "上步", "聚龙", "石潭", "小坪", "石井", "亭岗", "滘心"] }] },
+        "11号线": { theme: "border-purple-600 text-purple-800 bg-purple-50", btnTheme: "bg-purple-600 hover:bg-purple-700 text-white", directions: [{ name: "内环 (顺时针)", stations: ["广州东站", "天河东", "燕岭", "大金钟", "广园新村", "梓元岗", "广州火车站", "流花", "彩虹桥", "中山八", "如意坊", "石围塘", "芳村", "芳村大道东", "沙涌", "鹤洞东", "南石路", "燕岗", "江泰路", "五凤", "逸景路", "上涌公园", "大塘", "石榴岗", "赤沙", "琶洲", "员村", "天河公园", "华景路"] }, { name: "外环 (逆时针)", stations: ["广州东站", "华景路", "天河公园", "员村", "琶洲", "赤沙", "石榴岗", "大塘", "上涌公园", "逸景路", "五凤", "江泰路", "燕岗", "南石路", "鹤洞东", "沙涌", "芳村大道东", "芳村", "石围塘", "如意坊", "中山八", "彩虹桥", "流花", "广州火车站", "梓元岗", "广园新村", "大金钟", "燕岭", "天河东"] }] },
+        "18号线": { theme: "border-[#154696] text-[#154696] bg-[#eef3fb]", btnTheme: "bg-[#154696] hover:bg-[#0f3473] text-white", directions: [{ name: "往 万顷沙", stations: ["冼村", "磨碟沙", "龙潭", "沙溪", "南村万博", "番禺广场", "横沥", "万顷沙"] }, { name: "往 冼村", stations: ["万顷沙", "横沥", "番禺广场", "南村万博", "沙溪", "龙潭", "磨碟沙", "冼村"] }] },
+        "广佛线": { theme: "border-lime-500 text-lime-700 bg-lime-50", btnTheme: "bg-lime-500 hover:bg-lime-600 text-white", directions: [{ name: "往 沥滘", stations: ["新城东", "东平", "世纪莲", "澜石", "魁奇路", "季华园", "同济路", "祖庙", "普君北路", "朝安", "桂城", "南桂路", "𧒽岗", "千灯湖", "金融高新区", "龙溪", "菊树", "西塱", "鹤洞", "沙涌", "沙园", "燕岗", "石溪", "南洲", "沥滘"] }, { name: "往 新城东", stations: ["沥滘", "南洲", "石溪", "燕岗", "沙园", "沙涌", "鹤洞", "西塱", "菊树", "龙溪", "金融高新区", "千灯湖", "𧒽岗", "南桂路", "桂城", "朝安", "普君北路", "祖庙", "同济路", "季华园", "魁奇路", "澜石", "世纪莲", "东平", "新城东"] }] },
+        "佛山2号线": { theme: "border-red-500 text-red-700 bg-red-50", btnTheme: "bg-red-500 hover:bg-red-600 text-white", directions: [{ name: "往 广州南站", stations: ["南庄", "湖涌", "绿岛湖", "莲塘", "张槎", "石湾", "沙岗", "魁奇路", "石梁", "湾华", "登洲", "花卉世界", "仙涌", "石洲", "林岳西", "林岳东", "广州南站"] }, { name: "往 南庄", stations: ["广州南站", "林岳东", "林岳西", "石洲", "仙涌", "花卉世界", "登洲", "湾华", "石梁", "魁奇路", "沙岗", "石湾", "张槎", "莲塘", "绿岛湖", "湖涌", "南庄"] }] },
+        "南海有轨1号线": { theme: "border-cyan-400 text-cyan-700 bg-cyan-50", btnTheme: "bg-cyan-500 hover:bg-cyan-600 text-white", directions: [{ name: "往 林岳东", stations: ["𧒽岗", "华翠路", "夏西", "夏东", "康怡公园", "平西", "平南", "玉器街", "中区", "三山新城北", "三山新城南", "林岳北", "林岳西", "林岳东"] }, { name: "往 𧒽岗", stations: ["林岳东", "林岳西", "林岳北", "三山新城南", "三山新城北", "中区", "玉器街", "平南", "平西", "康怡公园", "夏东", "夏西", "华翠路", "𧒽岗"] }] },
+      };
+
+      const lines = Object.keys(metroNetwork);
+
+      // --- 物理传导时刻表引擎 ---
+      const generateTimetable = (line, directionIndex, station, baseDate) => {
+        const hours = baseDate.getHours();
+        const mins = baseDate.getMinutes();
+        const timeInMins = hours * 60 + mins;
+        const isPeak = (timeInMins >= 7.5*60 && timeInMins <= 9.5*60) || (timeInMins >= 17.5*60 && timeInMins <= 19.5*60);
+
+        const intervalData = {
+          "1号线": { peak: 2.5, offPeak: 4 }, "2号线": { peak: 2.5, offPeak: 4 }, "3号线": { peak: 2.0, offPeak: 3.5 },
+          "7号线": { peak: 4.0, offPeak: 6.0 }, "8号线": { peak: 3.0, offPeak: 5.0 }, "11号线": { peak: 3.5, offPeak: 6.0 },
+          "18号线": { peak: 7.5, offPeak: 9.0 }, "广佛线": { peak: 3.5, offPeak: 5.5 }, "佛山2号线": { peak: 5.5, offPeak: 8.0 }, "南海有轨1号线": { peak: 8.0, offPeak: 12.0 }
+        };
+        
+        const config = intervalData[line] || { peak: 4, offPeak: 6 };
+        const currentIntervalMins = isPeak ? config.peak : config.offPeak;
+
+        const stationsArray = metroNetwork[line].directions[directionIndex].stations;
+        const stationIndex = stationsArray.indexOf(station);
+        
+        const travelOffsetMins = stationIndex * 2.2;
+
+        let lineHash = 0;
+        const hashTarget = `${line}-${directionIndex}`;
+        for (let i = 0; i < hashTarget.length; i++) { lineHash = (lineHash << 5) - lineHash + hashTarget.charCodeAt(i); lineHash |= 0; }
+        const lineBaseOffset = Math.abs(lineHash) % currentIntervalMins; 
+        
+        const currentAbsoluteMins = hours * 60 + mins + (baseDate.getSeconds() / 60);
+        const effectiveTerminusTime = currentAbsoluteMins - travelOffsetMins - lineBaseOffset;
+        
+        let timeToNextDeparture = currentIntervalMins - (effectiveTerminusTime % currentIntervalMins);
+        if (timeToNextDeparture < 0) timeToNextDeparture += currentIntervalMins;
+        if (timeToNextDeparture >= currentIntervalMins) timeToNextDeparture -= currentIntervalMins;
+
+        let firstTrainWait = timeToNextDeparture;
+        if (firstTrainWait <= 0.1) firstTrainWait += currentIntervalMins; 
+
+        const times = [];
+        let accumulatedMins = firstTrainWait;
+
+        for (let i = 0; i < 12; i++) {
+          const d = new Date(baseDate.getTime() + accumulatedMins * 60000);
+          
+          let isExpress = false;
+          if (line === "18号线") {
+             const expressSeed = Math.abs(lineHash + stationIndex + i) % 5;
+             if (expressSeed === 0 && i !== 0) isExpress = true;
+          }
+
+          times.push({
+            id: `t_${i}`,
+            timeStr: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
+            label: i === 0 ? (isPeak ? "高峰进站" : "即将进站") : `后续`,
+            isExpress: isExpress,
+            dateObj: d
+          });
+
+          accumulatedMins += currentIntervalMins;
+        }
+        return times;
+      };
+
+      // --- 下拉组件 ---
+      const CustomLineSelect = ({ legId, value, onChange }) => {
+        const [isOpen, setIsOpen] = useState(false);
+        const ref = useRef(null);
+        
+        useEffect(() => {
+          const handleClickOutside = (e) => { if (ref.current && !ref.current.contains(e.target)) setIsOpen(false); };
+          document.addEventListener('mousedown', handleClickOutside);
+          document.addEventListener('touchstart', handleClickOutside);
+          return () => { document.removeEventListener('mousedown', handleClickOutside); document.removeEventListener('touchstart', handleClickOutside); };
+        }, []);
+
+        const shortName = getLineShortName(value);
+
+        return (
+          <div ref={ref} className="relative z-50">
+            <div onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-2.5 cursor-pointer py-1 select-none no-swipe">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow-sm ${metroNetwork[value].btnTheme} shrink-0`}>
+                {shortName}
+              </div>
+              <span className="text-[20px] font-sans font-normal text-slate-800 flex items-center gap-1.5 transition-colors tracking-normal">
+                {value} 
+                <div className={`transition-transform duration-300 flex items-center justify-center ${isOpen ? 'rotate-90' : ''}`}>
+                  <ChevronRightSvg className="w-5 h-5 text-slate-400 opacity-80" />
+                </div>
+              </span>
+            </div>
+            
+            {isOpen && (
+              <div className="absolute top-full left-0 mt-3 w-48 max-h-72 overflow-y-auto bg-white border border-slate-200 rounded-2xl shadow-xl z-50 py-1 hide-scrollbar no-swipe">
+                {lines.map(l => {
+                  const sName = getLineShortName(l);
+                  return (
+                    <div key={l} onClick={() => { onChange(legId, 'line', l); setIsOpen(false); }} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors border-b border-slate-50 last:border-0">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm shrink-0 ${metroNetwork[l].btnTheme}`}>
+                        {sName}
+                      </div>
+                      <span className="text-[16px] font-sans font-normal text-slate-700 tracking-normal">{l}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      // --- 滑动时刻表 ---
+      const NativeSwipeableTimetable = ({ leg, activeBtnTheme, onTimeSelect }) => {
+        const chunked = [];
+        for (let i = 0; i < leg.timetable.length; i += 4) chunked.push(leg.timetable.slice(i, i + 4));
+
+        const scrollRef = useRef(null);
+        const [activeIndex, setActiveIndex] = useState(0);
+
+        const handleScroll = (e) => {
+          const newIndex = Math.round(e.target.scrollLeft / e.target.clientWidth);
+          if (newIndex !== activeIndex) setActiveIndex(newIndex);
+        };
+
+        return (
+          <div className="bg-white/80 p-3 pt-4 rounded-xl border border-black/5 mt-4 relative no-swipe">
+            <div className="flex justify-between items-center mb-3 px-1">
+              <label className="block text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 opacity-70">
+                <Icon name="clock" className="w-3 h-3" /> 选择赶车时间
+              </label>
+            </div>
+            
+            <div ref={scrollRef} onScroll={handleScroll} className="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-2">
+              {chunked.map((page, pageIndex) => (
+                <div key={pageIndex} className="min-w-full snap-center shrink-0 px-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    {page.map(t => (
+                      <div key={t.id} onClick={() => onTimeSelect(leg.id, t)}
+                        className={`relative cursor-pointer rounded-xl p-2.5 text-center transition-all border select-none flex flex-col justify-center items-center h-[72px] ${leg.targetTime === t.timeStr ? `${activeBtnTheme} border-transparent shadow-lg scale-[1.03] z-10` : 'bg-white border-black/10 hover:border-black/30'}`}
+                      >
+                        <div className="flex items-center justify-center gap-1.5 mb-1.5 w-full px-1">
+                          {t.isExpress && (
+                            <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap">
+                              快车
+                            </span>
+                          )}
+                          <span className="font-mono text-[18px] font-bold leading-none tracking-tight">{t.timeStr}</span>
+                        </div>
+                        <div className={`text-[10px] font-medium px-2 py-0.5 rounded-full inline-block ${leg.targetTime === t.timeStr ? 'bg-black/20 text-white' : (pageIndex === 0 && page.indexOf(t) === 0) ? 'bg-red-50 text-red-500' : 'bg-slate-100 text-slate-500'}`}>
+                          {t.label}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-center gap-1.5 mt-2">
+              {chunked.map((_, idx) => (
+                <div key={idx} className={`h-1.5 rounded-full transition-all duration-300 ${activeIndex === idx ? `w-4 ${activeBtnTheme}` : 'w-1.5 bg-slate-200'}`}></div>
+              ))}
+            </div>
+          </div>
+        );
+      };
+
+      // --- 向右滑动抽屉 ---
+      const SwipeableLegCard = ({ leg, isRemovable, activeTheme, isFavorited, onToggleFavorite, onRemove, children }) => {
+        const [offset, setOffset] = useState(0);
+        const [isDragging, setIsDragging] = useState(false);
+        const startX = useRef(0);
+        const prevOffset = useRef(0);
+        
+        const maxOffset = isRemovable ? 140 : 70; 
+
+        const handleTouchStart = (e) => {
+          if (e.target.closest('.no-swipe') || e.target.closest('button')) return;
+          startX.current = e.touches[0].clientX;
+          setIsDragging(true);
+        };
+        const handleTouchMove = (e) => {
+          if (!isDragging) return;
+          if (e.target.closest('.no-swipe') || e.target.closest('button')) return;
+          const deltaX = e.touches[0].clientX - startX.current;
+          let newOffset = prevOffset.current + deltaX;
+          if (newOffset < 0) newOffset = 0; 
+          if (newOffset > maxOffset + 30) newOffset = maxOffset + 30; 
+          setOffset(newOffset);
+        };
+        const handleTouchEnd = () => {
+          setIsDragging(false);
+          if (offset > maxOffset / 2) { setOffset(maxOffset); prevOffset.current = maxOffset; } 
+          else { setOffset(0); prevOffset.current = 0; }
+        };
+        
+        const handleMouseDown = (e) => {
+          if (e.target.closest('.no-swipe') || e.target.closest('button')) return;
+          startX.current = e.clientX;
+          setIsDragging(true);
+        };
+        const handleMouseMove = (e) => {
+          if (!isDragging) return;
+          const deltaX = e.clientX - startX.current;
+          let newOffset = prevOffset.current + deltaX;
+          if (newOffset < 0) newOffset = 0;
+          if (newOffset > maxOffset + 30) newOffset = maxOffset + 30;
+          setOffset(newOffset);
+        };
+        const handleMouseUp = () => {
+          if (!isDragging) return;
+          setIsDragging(false);
+          if (offset > maxOffset / 2) { setOffset(maxOffset); prevOffset.current = maxOffset; } 
+          else { setOffset(0); prevOffset.current = 0; }
+        };
+
+        return (
+          <div className="relative w-full z-10 overflow-hidden rounded-2xl bg-slate-200 border border-slate-200 shadow-sm">
+            <div className="absolute inset-y-0 left-0 flex items-center justify-start pl-3 gap-3 z-0 w-[150px] overflow-hidden bg-slate-100">
+                <button 
+                  onClick={() => { onToggleFavorite(leg); setOffset(0); prevOffset.current=0; }} 
+                  className={`w-[56px] h-[56px] rounded-full flex flex-col items-center justify-center shadow-md transition-colors ${isFavorited ? 'bg-amber-500 text-white' : 'bg-white text-slate-600 hover:bg-amber-50'}`}
+                >
+                    <Icon name="star" className={`w-5 h-5 ${isFavorited ? 'fill-current' : ''}`} />
+                    <span className="text-[10px] font-bold mt-0.5">{isFavorited ? '已藏' : '收藏'}</span>
+                </button>
+                {isRemovable && (
+                  <button 
+                    onClick={onRemove} 
+                    className="w-[56px] h-[56px] bg-red-500 text-white rounded-full flex flex-col items-center justify-center shadow-md hover:bg-red-600 active:bg-red-700"
+                  >
+                      <Icon name="trash-2" className="w-5 h-5" />
+                      <span className="text-[10px] font-bold mt-0.5">删除</span>
+                  </button>
+                )}
+            </div>
+
+            <div 
+              className={`relative z-10 bg-white p-4 md:p-5 h-full ${activeTheme}`}
+              style={{ transform: `translateX(${offset}px)`, transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' }}
+              onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
+              onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
+            >
+                {children}
+            </div>
+          </div>
+        );
+      };
+
+      // --- 主应用 State ---
+      const [appState, setAppState] = useState('setup'); 
+      const [currentTime, setCurrentTime] = useState(new Date());
+      const [showFavoritesModal, setShowFavoritesModal] = useState(false);
+      const [isRefreshing, setIsRefreshing] = useState(false);
+      const [isLocating, setIsLocating] = useState(false);
+      const [isMapLoading, setIsMapLoading] = useState(false); // 控制地图假加载层
+      const [toastMsg, setToastMsg] = useState("");
+      
+      const [favorites, setFavorites] = useState([
+        { id: 'f1', line: '7号线', dirIndex: 0, station: '锦龙' },
+        { id: 'f2', line: '18号线', dirIndex: 0, station: '南村万博' }
+      ]);
+      
+      const initialLine = "18号线";
+      const initialDirIndex = 0; 
+      const initialStation = "南村万博"; 
+      const initialTimetable = generateTimetable(initialLine, initialDirIndex, initialStation, new Date());
+
+      const [legs, setLegs] = useState([
+        { 
+          id: '1', line: initialLine, dirIndex: initialDirIndex, station: initialStation, 
+          timetable: initialTimetable, targetTime: initialTimetable[0].timeStr, targetIsExpress: initialTimetable[0].isExpress
+        }
+      ]);
+
+      useEffect(() => {
+        let timer;
+        if (appState === 'countdown') timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        return () => { if (timer) clearInterval(timer); };
+      }, [appState]);
+
+      const showToast = (msg) => {
+        setToastMsg(msg);
+        setTimeout(() => setToastMsg(""), 3500);
+      };
+
+      const handleRefreshTimetable = () => {
+        setIsRefreshing(true);
+        setTimeout(() => {
+          const now = new Date();
+          setLegs(legs.map(leg => {
+            const newTimeT = generateTimetable(leg.line, leg.dirIndex, leg.station, now);
+            const stillExists = newTimeT.find(t => t.timeStr === leg.targetTime);
+            return { ...leg, timetable: newTimeT, targetTime: stillExists ? stillExists.timeStr : newTimeT[0].timeStr, targetIsExpress: stillExists ? stillExists.isExpress : newTimeT[0].isExpress };
+          }));
+          setIsRefreshing(false);
+          showToast("最新发车数据已同步");
+        }, 800);
+      };
+
+      const handleLocate = () => {
+        if (!navigator.geolocation) {
+          showToast("您的设备不支持GPS定位");
+          return;
+        }
+        setIsLocating(true);
+        showToast("正在获取高精度 GPS 信号...");
+        
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            
+            let closestStation = null;
+            let minDistance = Infinity;
+
+            stationCoordinates.forEach(station => {
+              const dist = getDistance(lat, lng, station.lat, station.lng);
+              if (dist < minDistance) {
+                minDistance = dist;
+                closestStation = station;
+              }
+            });
+
+            if (minDistance > 50) {
+              showToast("您当前不在广佛地铁覆盖范围内");
+              setIsLocating(false);
+              return;
+            }
+
+            if (closestStation) {
+              const now = new Date();
+              const newTimeT = generateTimetable(closestStation.line, 0, closestStation.station, now);
+              
+              setLegs([{ 
+                id: Date.now().toString(), 
+                line: closestStation.line, 
+                dirIndex: 0, 
+                station: closestStation.station, 
+                timetable: newTimeT, 
+                targetTime: newTimeT[0].timeStr, 
+                targetIsExpress: newTimeT[0].isExpress
+              }]);
+              showToast(`定位成功！距 ${closestStation.station} 站约 ${minDistance.toFixed(1)} km`);
+            }
+            setIsLocating(false);
+          },
+          (error) => {
+            console.error(error);
+            showToast("定位失败，请确保您的手机和浏览器已开启位置权限");
+            setIsLocating(false);
+          },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
+      };
+
+      const handleUpdateLeg = (id, field, value) => {
+        const now = new Date(); 
+        setLegs(legs.map(leg => {
+          if (leg.id === id) {
+            let updatedLeg = { ...leg, [field]: value };
+            
+            if (field === 'line') {
+              updatedLeg.dirIndex = 0; 
+              let newStation = metroNetwork[value].directions[0].stations[0];
+              if (value === "7号线") newStation = "锦龙";
+              else if (value === "18号线") newStation = "南村万博";
+              else if (value === "佛山2号线") newStation = "南庄";
+              
+              updatedLeg.station = newStation;
+              const newTimeT = generateTimetable(value, updatedLeg.dirIndex, updatedLeg.station, now);
+              updatedLeg.timetable = newTimeT;
+              updatedLeg.targetTime = newTimeT[0].timeStr;
+              updatedLeg.targetIsExpress = newTimeT[0].isExpress;
+
+            } else if (field === 'dirIndex') {
+               let newStation = metroNetwork[updatedLeg.line].directions[value].stations[0];
+               if (updatedLeg.line === "7号线") newStation = "锦龙";
+               else if (updatedLeg.line === "18号线") newStation = "南村万博";
+               else if (updatedLeg.line === "佛山2号线" && value === 1) newStation = "广州南站";
+
+               updatedLeg.station = newStation;
+               const newTimeT = generateTimetable(updatedLeg.line, value, updatedLeg.station, now);
+               updatedLeg.timetable = newTimeT;
+               updatedLeg.targetTime = newTimeT[0].timeStr;
+               updatedLeg.targetIsExpress = newTimeT[0].isExpress;
+
+            } else if (field === 'station') {
+              const newTimeT = generateTimetable(updatedLeg.line, updatedLeg.dirIndex, value, now);
+              updatedLeg.timetable = newTimeT;
+              updatedLeg.targetTime = newTimeT[0].timeStr;
+              updatedLeg.targetIsExpress = newTimeT[0].isExpress;
+            }
+            return updatedLeg;
+          }
+          return leg;
+        }));
+      };
+
+      const handleTimeSelect = (legId, timeItem) => {
+        setLegs(legs.map(leg => 
+          leg.id === legId ? { ...leg, targetTime: timeItem.timeStr, targetIsExpress: timeItem.isExpress } : leg
+        ));
+      };
+
+      const isFavorited = (leg) => favorites.some(f => f.line === leg.line && f.dirIndex === leg.dirIndex && f.station === leg.station);
+      const handleToggleFavorite = (leg) => {
+        if (isFavorited(leg)) {
+          setFavorites(favorites.filter(f => !(f.line === leg.line && f.dirIndex === leg.dirIndex && f.station === leg.station)));
+          showToast("已取消收藏");
+        } else {
+          setFavorites([...favorites, { id: Date.now().toString(), line: leg.line, dirIndex: leg.dirIndex, station: leg.station }]);
+          showToast("路线已添加至收藏夹");
+        }
+      };
+
+      const handleAddLeg = () => {
+        const lastLeg = legs[legs.length - 1];
+        let baseTime = new Date();
+        if (lastLeg && lastLeg.targetTime) {
+          const [h, m] = lastLeg.targetTime.split(':').map(Number);
+          baseTime = new Date();
+          baseTime.setHours(h, m + 15, 0, 0); 
+        }
+        const newLine = "7号线"; 
+        const newDir = 0;
+        const newStation = "锦龙"; 
+        const newTimeT = generateTimetable(newLine, newDir, newStation, baseTime);
+
+        setLegs([...legs, { 
+          id: Date.now().toString(), line: newLine, dirIndex: newDir, station: newStation, 
+          timetable: newTimeT, targetTime: newTimeT[0].timeStr, targetIsExpress: newTimeT[0].isExpress
+        }]);
+      };
+
+      const handleAddFromFavorite = (fav) => {
+        const lastLeg = legs[legs.length - 1];
+        let baseTime = new Date();
+        if (lastLeg && lastLeg.targetTime) {
+          const [h, m] = lastLeg.targetTime.split(':').map(Number);
+          baseTime = new Date();
+          baseTime.setHours(h, m + 15, 0, 0); 
+        }
+        const newTimeT = generateTimetable(fav.line, fav.dirIndex, fav.station, baseTime);
+        setLegs([...legs, { 
+          id: Date.now().toString(), line: fav.line, dirIndex: fav.dirIndex, station: fav.station, 
+          timetable: newTimeT, targetTime: newTimeT[0].timeStr, targetIsExpress: newTimeT[0].isExpress
+        }]);
+        setShowFavoritesModal(false);
+        showToast("已成功导入收藏路线");
+      };
+
+      const handleRemoveLeg = (id) => {
+        if (legs.length > 1) {
+          setLegs(legs.filter(leg => leg.id !== id));
+          showToast("路线已移除");
+        }
+      };
+
+      const startCountdown = () => {
+        if (legs.every(leg => leg.targetTime !== "")) {
+          setCurrentTime(new Date()); 
+          setAppState('countdown');
+        } else showToast("请为所有行程选择班次");
+      };
+
+      if (appState === 'setup') {
+        return (
+          <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col items-center justify-start relative">
+            
+            {/* 顶层 Fake Loading 假加载界面：欺骗视觉，掩盖浏览器跳出前几秒的卡顿 */}
+            {isMapLoading && (
+              <div className="fixed inset-0 z-[300] bg-slate-900/80 backdrop-blur-md flex flex-col items-center justify-center text-white animate-fade-in">
+                 <Icon name="loader-2" className="w-12 h-12 animate-spin mb-4 text-teal-400" />
+                 <div className="text-lg font-bold tracking-widest">正在为您构建安全通道...</div>
+                 <div className="text-xs text-white/60 mt-2 tracking-widest">即将跳转至高清交互视图</div>
+              </div>
+            )}
+
+            {toastMsg && (
+              <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[200] bg-slate-800 text-white px-5 py-2.5 rounded-full shadow-lg text-sm font-bold flex items-center gap-2 animate-slide-up whitespace-nowrap">
+                <Icon name="info" className="w-4 h-4 text-blue-400 shrink-0" /> {toastMsg}
+              </div>
+            )}
+
+            <div className="w-full max-w-md bg-white shadow-sm flex flex-col h-screen overflow-hidden relative">
+              
+              {/* 全局右上角操作区 */}
+              <div className="flex items-center justify-end flex-wrap gap-2 px-4 py-3 bg-white z-50 shadow-sm shrink-0 border-b border-slate-100">
+                 <button onClick={handleLocate} disabled={isLocating} className="flex items-center justify-center gap-1 bg-white border border-purple-200 text-purple-600 px-3 py-1.5 rounded-full text-[11px] font-bold shadow-sm hover:bg-purple-50 transition-colors disabled:opacity-70 pointer-events-auto">
+                    <Icon name="navigation" className={`w-3.5 h-3.5 ${isLocating ? 'animate-pulse' : ''}`} /> 
+                    {isLocating ? '定位中' : '定位'}
+                 </button>
+                 <button onClick={handleRefreshTimetable} disabled={isRefreshing} className="flex items-center justify-center gap-1 bg-white border border-blue-200 text-blue-600 px-3 py-1.5 rounded-full text-[11px] font-bold shadow-sm hover:bg-blue-50 transition-colors disabled:opacity-70 pointer-events-auto">
+                    <Icon name="refresh-cw" className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} /> 
+                    刷新
+                 </button>
+                 
+                 {/* 极速外链触发器：点击瞬间展示加载蒙层，掩盖原生跳转延迟 */}
+                 <a 
+                   href="https://ipt.kopisee.com/canton/zh-cn/gzmtr-system-map" 
+                   target="_blank" 
+                   rel="noopener noreferrer"
+                   onClick={() => {
+                     setIsMapLoading(true);
+                     setTimeout(() => setIsMapLoading(false), 2500); // 2.5秒后切走或切回时自动清除蒙层
+                   }}
+                   className="flex items-center justify-center gap-1 bg-white border border-teal-200 text-teal-600 px-3 py-1.5 rounded-full text-[11px] font-bold shadow-sm hover:bg-teal-50 transition-colors pointer-events-auto cursor-pointer"
+                 >
+                    <Icon name="map" className="w-3.5 h-3.5" /> 线路图
+                 </a>
+
+                 <button onClick={() => setShowFavoritesModal(true)} className="flex items-center justify-center gap-1 bg-white border border-amber-200 text-amber-600 px-3 py-1.5 rounded-full text-[11px] font-bold shadow-sm hover:bg-amber-50 transition-colors pointer-events-auto">
+                    <Icon name="star" className="w-3.5 h-3.5 fill-current" /> 收藏夹
+                 </button>
+              </div>
+
+              {/* 滑动主容器 */}
+              <div className="p-4 md:p-6 space-y-6 overflow-y-auto flex-1 relative bg-slate-50 hide-scrollbar pb-12 pt-4">
+                <div className="space-y-6 relative">
+                  {legs.map((leg, index) => {
+                    const currentNetworkObj = metroNetwork[leg.line];
+                    const activeTheme = currentNetworkObj.theme;
+                    const activeBtnTheme = currentNetworkObj.btnTheme;
+                    const stationList = currentNetworkObj.directions[leg.dirIndex].stations;
+
+                    return (
+                      <div key={leg.id} className="relative z-10" style={{ zIndex: legs.length - index }}>
+                        {index !== legs.length - 1 && <div className="absolute left-[35px] top-[40px] bottom-[-40px] w-0.5 bg-slate-200 z-0 pointer-events-none"></div>}
+
+                        <SwipeableLegCard leg={leg} isRemovable={legs.length > 1} activeTheme={activeTheme} isFavorited={isFavorited(leg)} onToggleFavorite={handleToggleFavorite} onRemove={() => handleRemoveLeg(leg.id)}>
+                          <div className="flex justify-between items-center mb-5">
+                             <div className="flex items-center w-full">
+                               <CustomLineSelect legId={leg.id} value={leg.line} onChange={handleUpdateLeg} />
+                             </div>
+                             {isFavorited(leg) && <Icon name="star" className="w-5 h-5 text-amber-500 fill-current opacity-80 shrink-0 absolute right-5 top-5 pointer-events-none" />}
+                          </div>
+
+                          <div className="space-y-3">
+                            <div className="bg-slate-50 p-2 rounded-xl flex items-center gap-2 border border-black/5 shadow-sm no-swipe">
+                              <Icon name="arrow-left-right" className="w-4 h-4 text-black/40 ml-2 shrink-0" />
+                              <select 
+                                value={leg.dirIndex}
+                                onChange={(e) => handleUpdateLeg(leg.id, 'dirIndex', Number(e.target.value))}
+                                className="flex-1 bg-transparent text-sm font-sans font-normal p-1 outline-none w-full truncate"
+                              >
+                                {currentNetworkObj.directions.map((dir, idx) => (
+                                  <option key={idx} value={idx}>{dir.name}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className="no-swipe">
+                               <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5 opacity-70 ml-1">在此站上车</label>
+                               <select 
+                                 value={leg.station}
+                                 onChange={(e) => handleUpdateLeg(leg.id, 'station', e.target.value)}
+                                 className="w-full bg-slate-50 border border-black/10 rounded-xl p-3.5 text-base font-sans font-normal outline-none focus:ring-2 focus:ring-black/10 shadow-sm transition-shadow"
+                               >
+                                 {stationList.map(s => <option key={s} value={s}>{s}</option>)}
+                               </select>
+                            </div>
+                          </div>
+
+                          <NativeSwipeableTimetable leg={leg} activeBtnTheme={activeBtnTheme} onTimeSelect={handleTimeSelect} />
+                        </SwipeableLegCard>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                <div className="pt-6 relative z-10 space-y-4">
+                  <button onClick={handleAddLeg} className="w-full py-4 border-2 border-dashed border-slate-300 text-slate-500 rounded-2xl flex items-center justify-center gap-2 hover:border-slate-500 hover:bg-white transition-colors text-sm font-bold shadow-sm">
+                    <Icon name="plus" className="w-5 h-5" /> 添加换乘
+                  </button>
+                  
+                  {legs.length > 1 && (
+                     <p className="text-center text-[10px] text-slate-400 opacity-80 pt-1 pb-1">
+                        向右滑动卡片可删除或收藏路线 <ChevronRightSvg className="w-3 h-3 inline ml-0.5 opacity-60" />
+                     </p>
+                  )}
+
+                  <button onClick={startCountdown} className="w-full mt-2 py-4 bg-slate-900 hover:bg-black text-white rounded-2xl flex items-center justify-center gap-2 font-bold text-lg transition-transform active:scale-[0.98] shadow-xl">
+                    <Icon name="play" className="w-5 h-5 fill-current" /> 启动牛马赶车提醒
+                  </button>
+                  <div className="text-center text-[10px] font-mono text-slate-400 opacity-60 pt-2 pb-4">v12 Flash Load Edition</div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* 收藏夹 Modal 抽屉 */}
+            {showFavoritesModal && (
+              <div className="absolute inset-0 z-[150] flex flex-col justify-end">
+                <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => setShowFavoritesModal(false)}></div>
+                <div className="relative bg-white rounded-t-3xl p-6 shadow-2xl animate-slide-up max-h-[70vh] overflow-y-auto w-full max-w-md mx-auto">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-lg font-bold flex items-center gap-2 text-slate-800">
+                      <Icon name="star" className="w-5 h-5 text-amber-500 fill-current" /> 收藏路线
+                    </h3>
+                    <button onClick={() => setShowFavoritesModal(false)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200">
+                      <Icon name="x" className="w-5 h-5 text-slate-500" />
+                    </button>
+                  </div>
+                  
+                  {favorites.length === 0 ? (
+                    <div className="py-12 text-center text-slate-400 text-sm">
+                      <Icon name="bookmark" className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                      暂无收藏<br/>在主界面向右滑动卡片即可收藏
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {favorites.map(fav => {
+                        const dirName = metroNetwork[fav.line].directions[fav.dirIndex].name;
+                        const themeStr = metroNetwork[fav.line].btnTheme.split(' ')[0];
+                        return (
+                          <div key={fav.id} onClick={() => handleAddFromFavorite(fav)} className="p-4 border border-slate-100 rounded-2xl flex items-center justify-between active:bg-slate-50 cursor-pointer shadow-sm hover:border-slate-300 transition-all bg-white">
+                             <div className="flex items-center gap-3">
+                               <div className={`w-2 h-10 rounded-full ${themeStr}`}></div>
+                               <div>
+                                 <div className="font-bold text-base text-slate-800 flex items-center gap-2 font-sans tracking-normal">
+                                     <span className={`px-2 py-0.5 rounded text-[10px] text-white shadow-sm ${themeStr}`}>{getLineShortName(fav.line)}</span> 
+                                     {fav.station}
+                                 </div>
+                                 <div className="text-xs text-slate-500 mt-1 font-sans">{dirName}</div>
+                               </div>
+                             </div>
+                             <Icon name="plus-circle" className="w-6 h-6 text-slate-300 hover:text-slate-600" />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // --- 监控页面渲染 ---
+      const events = legs.map(leg => {
+        const dirName = metroNetwork[leg.line].directions[leg.dirIndex].name;
+        return {
+          id: leg.id, title: `${leg.station} 上车`, subtitle: `${leg.line} ${dirName} ${leg.targetIsExpress ? '(快车)' : ''}`,
+          time: leg.targetTime, lineThemeClass: metroNetwork[leg.line].btnTheme, isExpress: leg.targetIsExpress
+        }
+      });
+      const sortedEvents = [...events].sort((a, b) => a.time.localeCompare(b.time));
+      
+      const getEventDate = (timeStr) => {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        const date = new Date(currentTime);
+        date.setHours(hours, minutes, 0, 0);
+        if (currentTime.getHours() > 12 && hours < 12 && date < currentTime) date.setDate(date.getDate() + 1);
+        return date;
+      };
+      
+      let nextEvent = null, timeDiffMs = 0;
+      for (const ev of sortedEvents) {
+        const evDate = getEventDate(ev.time);
+        if (evDate > currentTime) {
+          nextEvent = ev; timeDiffMs = evDate - currentTime; break;
+        }
+      }
+      const minutesLeft = Math.floor(timeDiffMs / 60000);
+      const secondsLeft = Math.floor((timeDiffMs % 60000) / 1000);
+
+      return (
+        <div className="min-h-screen bg-[#0a0f18] p-4 md:p-8 font-sans text-slate-100 flex flex-col items-center justify-start pt-10 relative overflow-hidden">
+          
+          {isMapLoading && (
+            <div className="fixed inset-0 z-[300] bg-slate-900/80 backdrop-blur-md flex flex-col items-center justify-center text-white animate-fade-in">
+               <Icon name="loader-2" className="w-12 h-12 animate-spin mb-4 text-teal-400" />
+               <div className="text-lg font-bold tracking-widest">正在为您构建安全通道...</div>
+            </div>
+          )}
+
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
+          
+          <div className="w-full max-w-md relative z-10">
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-2 text-white">
+                <Icon name="activity" className="w-6 h-6 text-blue-400" />
+                <h1 className="text-xl font-bold tracking-wider font-sans">乘车监控</h1>
+              </div>
+              <div className="flex items-center gap-2">
+                 <a 
+                   href="https://ipt.kopisee.com/canton/zh-cn/gzmtr-system-map" 
+                   target="_blank" 
+                   rel="noopener noreferrer"
+                   onClick={() => {
+                     setIsMapLoading(true);
+                     setTimeout(() => setIsMapLoading(false), 2500); 
+                   }}
+                   className="flex items-center gap-1 text-sm bg-slate-800/80 backdrop-blur px-3 py-2 rounded-full hover:bg-slate-700 transition-colors text-slate-300 border border-slate-700 shadow-sm font-sans tracking-normal cursor-pointer"
+                 >
+                   <Icon name="map" className="w-4 h-4" />
+                 </a>
+                 <button onClick={() => setAppState('setup')} className="flex items-center gap-1 text-sm bg-slate-800/80 backdrop-blur px-4 py-2 rounded-full hover:bg-slate-700 transition-colors text-slate-300 border border-slate-700 shadow-sm font-sans tracking-normal">
+                   <Icon name="settings" className="w-4 h-4" /> 调整行程
+                 </button>
+              </div>
+            </div>
+
+            <div className={`rounded-3xl shadow-2xl p-8 mb-8 text-center relative overflow-hidden ${nextEvent ? nextEvent.lineThemeClass : 'bg-slate-800'} transition-colors duration-500`}>
+              <Icon name="clock" className="absolute -right-12 -top-12 w-64 h-64 text-white opacity-[0.07]" />
+              {nextEvent ? (
+                <div className="relative z-10">
+                  <div className="inline-flex flex-col items-center gap-1 mb-4">
+                     <span className="bg-black/30 text-white/90 px-3 py-1 rounded-full text-sm backdrop-blur-md flex items-center gap-1.5 shadow-inner">
+                       <Icon name="navigation" className="w-3.5 h-3.5" /> {nextEvent.subtitle}
+                     </span>
+                     <h2 className="text-2xl font-bold text-white mt-2 drop-shadow-md font-sans tracking-normal">{nextEvent.title}</h2>
+                  </div>
+                  <div className="flex items-baseline justify-center gap-2 mt-2 mb-2">
+                    <span className="text-8xl font-black tracking-tighter tabular-nums drop-shadow-lg text-white">{minutesLeft}</span>
+                    <span className="text-2xl font-bold text-white/70">分</span>
+                    <span className="text-6xl font-bold tracking-tighter tabular-nums text-white/90 ml-2 w-20 text-left drop-shadow-md">{String(secondsLeft).padStart(2, '0')}</span>
+                    <span className="text-xl font-bold text-white/70">秒</span>
+                  </div>
+                  {minutesLeft < 2 && (
+                    <div className="mt-6 inline-flex items-center gap-2 bg-red-600 text-white px-5 py-2.5 rounded-full font-bold text-sm shadow-[0_0_20px_rgba(220,38,38,0.5)] animate-pulse">
+                      <Icon name="alert-circle" className="w-5 h-5" />列车即将进站，请准备乘车
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="py-12 relative z-10">
+                  <Icon name="check" className="w-20 h-20 mx-auto mb-4 text-white/90 drop-shadow-lg" />
+                  <h2 className="text-3xl font-bold mb-2 text-white font-sans tracking-normal">行程圆满结束</h2>
+                  <p className="text-white/70 text-lg">欢迎搭乘</p>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-slate-900/80 backdrop-blur-xl rounded-3xl p-6 border border-slate-800 shadow-2xl">
+              <div className="space-y-0 relative">
+                <div className="absolute left-[31px] top-6 bottom-6 w-0.5 bg-slate-700 z-0"></div>
+                {sortedEvents.map((ev, index) => {
+                  const evDate = getEventDate(ev.time);
+                  const isPast = evDate <= currentTime;
+                  const isNext = nextEvent && ev.id === nextEvent.id;
+                  return (
+                    <div key={ev.id} className="relative z-10 flex items-start gap-5 pb-10 last:pb-0 group">
+                      <div className="w-16 text-right pt-0.5 shrink-0">
+                        <span className={`font-mono text-lg font-bold transition-colors ${isPast ? 'text-slate-600' : isNext ? 'text-white drop-shadow-md' : 'text-slate-400'}`}>{ev.time}</span>
+                      </div>
+                      <div className="relative flex flex-col items-center justify-center mt-1.5 shrink-0">
+                        {isNext ? (
+                          <div className="relative flex items-center justify-center w-6 h-6">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-40"></span>
+                            <div className={`w-4 h-4 rounded-full ring-4 ring-slate-900 shadow-[0_0_15px_rgba(255,255,255,0.4)] ${ev.lineThemeClass.split(' ')[0]}`}></div>
+                          </div>
+                        ) : isPast ? (
+                          <div className="w-3 h-3 rounded-full bg-slate-700 ring-4 ring-slate-900 mt-1"></div>
+                        ) : (
+                          <div className="w-3 h-3 rounded-full bg-slate-500 ring-4 ring-slate-900 mt-1"></div>
+                        )}
+                      </div>
+                      <div className={`flex-1 pt-0 transition-colors ${isPast ? 'opacity-40 line-through decoration-slate-600' : isNext ? 'opacity-100' : 'opacity-70'}`}>
+                        <div className="text-lg font-bold text-white mb-0.5 flex items-center gap-2 font-sans tracking-normal">
+                          {ev.title} 
+                          {ev.isExpress && <span className="bg-red-500/20 text-red-400 text-[10px] px-1.5 py-0.5 rounded border border-red-500/30">快车</span>}
+                        </div>
+                        <div className="text-xs font-medium text-slate-400 font-sans tracking-normal">{ev.subtitle}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
+
+
