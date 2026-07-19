@@ -156,49 +156,6 @@
       );
     };
 
-    // --- 应用内悬浮窗 (防止原生画中画失效时的降级方案) ---
-    const InAppPipWindow = ({ timeText, subtitle, onClose }) => {
-      const [pos, setPos] = useState({ x: window.innerWidth - 180, y: 80 });
-      const [isDragging, setIsDragging] = useState(false);
-      const startPos = useRef({ x: 0, y: 0 });
-
-      const handleTouchStart = (e) => {
-        setIsDragging(true);
-        startPos.current = {
-          x: e.touches[0].clientX - pos.x,
-          y: e.touches[0].clientY - pos.y
-        };
-      };
-
-      const handleTouchMove = (e) => {
-        if (!isDragging) return;
-        e.preventDefault(); 
-        let newX = e.touches[0].clientX - startPos.current.x;
-        let newY = e.touches[0].clientY - startPos.current.y;
-        
-        newX = Math.max(10, Math.min(window.innerWidth - 170, newX));
-        newY = Math.max(10, Math.min(window.innerHeight - 90, newY));
-        
-        setPos({ x: newX, y: newY });
-      };
-
-      const handleTouchEnd = () => setIsDragging(false);
-
-      return (
-        <div 
-          className="fixed z-[9999] bg-slate-900/95 dark:bg-slate-800/95 backdrop-blur-xl border border-slate-700/50 shadow-2xl rounded-2xl flex flex-col items-center justify-center p-3 select-none touch-none animate-fade-in"
-          style={{ left: pos.x, top: pos.y, width: '160px', height: '80px', transition: isDragging ? 'none' : 'box-shadow 0.3s' }}
-          onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
-        >
-          <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="absolute -top-2 -right-2 bg-slate-700 text-white rounded-full p-1 shadow-md hover:bg-red-500 transition-colors">
-             <Icon name="x" className="w-3 h-3" />
-          </button>
-          <div className="text-[10px] text-teal-400 font-bold tracking-wider mb-1 opacity-90">{subtitle}</div>
-          <div className="font-mono text-3xl font-black text-white tracking-tighter">{timeText}</div>
-        </div>
-      );
-    };
-
     function App() {
       const metroNetwork = {
         "1号线": { theme: "bg-yellow-50 dark:bg-[#1a1608] text-yellow-600 dark:text-yellow-500 border-yellow-400 dark:border-yellow-700/50", btnTheme: "bg-yellow-500 hover:bg-yellow-600 text-white", directions: [{ name: "往 广州东站", terminalFirst: "06:00", terminalLast: "22:55", stations: ["西塱", "坑口", "花地湾", "芳村", "黄沙", "长寿路", "陈家祠", "西门口", "公园前", "农讲所", "烈士陵园", "东山口", "杨箕", "体育西路", "体育中心", "广州东站"] }, { name: "往 西塱", terminalFirst: "06:10", terminalLast: "23:30", stations: ["广州东站", "体育中心", "体育西路", "杨箕", "东山口", "烈士陵园", "农讲所", "公园前", "西门口", "陈家祠", "长寿路", "黄沙", "芳村", "花地湾", "坑口", "西塱"] }] },
@@ -400,6 +357,7 @@
               <label className="block text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 opacity-70 text-slate-600 dark:text-slate-400">
                 <Icon name="clock" className="w-3 h-3" /> 选择时间
               </label>
+              
               {firstLastData && (
                  <span className={`text-[11px] font-mono font-bold tracking-tight transition-colors ${firstLastData.isWeekend ? 'text-purple-600 dark:text-purple-400 opacity-90' : 'text-slate-500 dark:text-slate-400 opacity-80'}`}>
                    {firstLastData.label} {firstLastData.time}
@@ -508,7 +466,6 @@
         );
       };
 
-      // --- State 声明 ---
       const [appState, setAppState] = useState('setup'); 
       const [currentTime, setCurrentTime] = useState(new Date());
       const [showFavoritesModal, setShowFavoritesModal] = useState(false);
@@ -516,6 +473,7 @@
       const [isLocating, setIsLocating] = useState(false);
       const [isMapLoading, setIsMapLoading] = useState(false); 
       const [toastMsg, setToastMsg] = useState("");
+      
       const [isDarkMode, setIsDarkMode] = useState(false);
 
       useEffect(() => {
@@ -545,8 +503,7 @@
         }
       ]);
 
-      // --- 【终极修复：全局数据中枢收敛】 ---
-      // 将下一班车的推演逻辑放在最顶层，彻底杜绝 ReferenceError
+      // --- 全局核心数据收敛 ---
       const sortedEvents = legs.map(leg => {
         const dirName = metroNetwork[leg.line].directions[leg.dirIndex].name;
         return {
@@ -574,11 +531,9 @@
 
       const mLeftPip = Math.floor(actualPipDiffMs / 60000);
       const sLeftPip = Math.floor((actualPipDiffMs % 60000) / 1000);
-
-      const currentCountdownText = nextEventForPip && actualPipDiffMs > 0 ? `${mLeftPip}:${String(sLeftPip).padStart(2,'0')}` : "00:00";
       const currentSubtitle = nextEventForPip ? nextEventForPip.subtitle : "行程结束";
 
-      // 独立的主时钟引擎
+      // 主时钟循环
       useEffect(() => {
         let timer;
         if (appState === 'countdown') {
@@ -587,7 +542,7 @@
         return () => { if (timer) clearInterval(timer); };
       }, [appState]);
 
-      // 动态标题引擎
+      // 动态网页标题，在后台也能显示倒计时
       useEffect(() => {
         if (appState === 'countdown' && nextEventForPip && actualPipDiffMs > 0) {
            document.title = `⏳ ${mLeftPip}:${String(sLeftPip).padStart(2,'0')} - MetroRush`;
@@ -812,24 +767,23 @@
         } else showToast("请为所有行程选择班次");
       };
 
-      // --- 无闪烁双轨悬浮引擎 ---
+      // --- 【终极纯血悬浮引擎】 彻底抛弃应用内假悬浮，采用黑科技混流注入 ---
       const canvasRef = useRef(null);
       const videoRef = useRef(null);
       const [isPipActive, setIsPipActive] = useState(false);
-      const [showInAppPip, setShowInAppPip] = useState(false);
 
       const latestDataRef = useRef({ appState, nextEventForPip, mLeftPip, sLeftPip });
       useEffect(() => {
         latestDataRef.current = { appState, nextEventForPip, mLeftPip, sLeftPip };
-      });
+      }, [appState, nextEventForPip, mLeftPip, sLeftPip]);
 
+      // 强力渲染循环，30fps，维持视频流不断流
       useEffect(() => {
         if (appState !== 'countdown' || !canvasRef.current) return;
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
-        let animationId;
-
-        const drawLoop = () => {
+        
+        let timer = setInterval(() => {
           const { appState: currentAppState, nextEventForPip: ev, mLeftPip: m, sLeftPip: s } = latestDataRef.current;
 
           if (currentAppState === 'countdown') {
@@ -856,32 +810,62 @@
               ctx.fillText('行程圆满结束', canvas.width/2, canvas.height/2 + 10);
             }
           }
-          animationId = requestAnimationFrame(drawLoop);
-        };
-        drawLoop();
-        return () => cancelAnimationFrame(animationId);
+        }, 33); // 维持在 30fps
+
+        return () => clearInterval(timer);
       }, [appState]);
 
+      // 纯粹的跨应用系统级画中画 (并加入开源社区音频轨注入 Hack 以突破限制)
       const togglePip = async () => {
-        if (document.pictureInPictureEnabled && videoRef.current && canvasRef.current && canvasRef.current.captureStream) {
-          try {
-            if (document.pictureInPictureElement) {
-              await document.exitPictureInPicture();
-              setIsPipActive(false);
-            } else {
-              if (!videoRef.current.srcObject) {
-                 videoRef.current.srcObject = canvasRef.current.captureStream(30);
-              }
-              await videoRef.current.play();
-              await videoRef.current.requestPictureInPicture();
-              setIsPipActive(true);
-            }
-            return; 
-          } catch (err) {
-            console.warn("系统限制了原生画中画，自动降级为内嵌悬浮窗");
-          }
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        
+        if (!document.pictureInPictureEnabled) {
+           showToast("系统级画中画在此设备/浏览器中被禁用");
+           return;
         }
-        setShowInAppPip(!showInAppPip);
+
+        if (!canvas.captureStream) {
+           showToast("当前内核不支持视频流转化 (如 iOS Safari)");
+           return;
+        }
+
+        try {
+          if (document.pictureInPictureElement === video) {
+            await document.exitPictureInPicture();
+            setIsPipActive(false);
+          } else {
+            if (!video.srcObject) {
+               const stream = canvas.captureStream(30);
+
+               // 【黑科技：静默音频轨注入】骗过系统沙盒，让它以为这是一个正经的媒体通话视频
+               try {
+                  const AudioContext = window.AudioContext || window.webkitAudioContext;
+                  if (AudioContext) {
+                      const ctx = new AudioContext();
+                      const oscillator = ctx.createOscillator();
+                      const dst = ctx.createMediaStreamDestination();
+                      oscillator.connect(dst);
+                      oscillator.start();
+                      const audioTrack = dst.stream.getAudioTracks()[0];
+                      if (audioTrack) {
+                          stream.addTrack(audioTrack);
+                      }
+                  }
+               } catch (audioErr) {
+                  console.warn("静默音频注入失败", audioErr);
+               }
+
+               video.srcObject = stream;
+            }
+            await video.play();
+            await video.requestPictureInPicture();
+            setIsPipActive(true);
+          }
+        } catch (err) {
+          console.error("PiP Error:", err);
+          showToast("系统严格拦截了跨应用悬浮请求（或您的设备底层暂不支持）");
+        }
       };
 
       if (appState === 'setup') {
@@ -1007,7 +991,7 @@
                   <button onClick={startCountdown} className="w-full mt-6 py-4 bg-slate-900 dark:bg-slate-100 hover:bg-black dark:hover:bg-white text-white dark:text-slate-900 rounded-2xl flex items-center justify-center gap-2 font-bold text-lg transition-transform active:scale-[0.98] shadow-xl">
                     <Icon name="play" className="w-5 h-5 fill-current" /> 启动 MetroRush
                   </button>
-                  <div className="text-center text-[10px] font-mono tracking-tighter text-slate-400 dark:text-slate-600 opacity-60 pt-2 pb-4">v1.9.5</div>
+                  <div className="text-center text-[10px] font-mono tracking-tighter text-slate-400 dark:text-slate-600 opacity-60 pt-2 pb-4">v1.9.9</div>
                 </div>
               </div>
 
@@ -1070,19 +1054,13 @@
         );
       }
 
+      // --- 监控页面渲染 ---
       return (
         <div className="min-h-screen bg-slate-100 dark:bg-[#0a0f18] p-4 md:p-8 font-sans flex flex-col items-center justify-start pt-10 relative overflow-hidden transition-colors duration-500">
           
-          <canvas ref={canvasRef} width="400" height="200" className="hidden"></canvas>
-          <video ref={videoRef} muted playsInline className="hidden"></video>
-
-          {showInAppPip && (
-            <InAppPipWindow 
-              timeText={currentCountdownText} 
-              subtitle={currentSubtitle} 
-              onClose={() => setShowInAppPip(false)} 
-            />
-          )}
+          {/* 【修复核心：画中画挂载器】将画布和视频隐藏在屏幕之外，彻底去除应用内的虚假悬浮窗 */}
+          <canvas ref={canvasRef} width="400" height="200" className="fixed -top-[1000px] left-0 pointer-events-none -z-50" style={{ width: '400px', height: '200px' }}></canvas>
+          <video ref={videoRef} autoPlay playsInline muted className="fixed -top-[1000px] left-0 pointer-events-none -z-50" style={{ width: '10px', height: '10px' }}></video>
 
           {isMapLoading && (
             <div className="fixed inset-0 z-[500] bg-slate-900/90 backdrop-blur-md flex flex-col items-center justify-center text-white animate-fade-in">
@@ -1103,7 +1081,7 @@
               <div className="flex items-center gap-2">
                  <button 
                    onClick={togglePip}
-                   className={`flex items-center gap-1 text-sm backdrop-blur px-3 py-2 rounded-full transition-colors font-sans tracking-normal border shadow-sm ${isPipActive || showInAppPip ? 'bg-teal-500 text-white border-teal-600' : 'bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700'}`}
+                   className={`flex items-center gap-1 text-sm backdrop-blur px-3 py-2 rounded-full transition-colors font-sans tracking-normal border shadow-sm ${isPipActive ? 'bg-teal-500 text-white border-teal-600' : 'bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700'}`}
                  >
                    <Icon name="picture-in-picture" className="w-4 h-4" /> 悬浮
                  </button>
