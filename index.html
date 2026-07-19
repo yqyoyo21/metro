@@ -123,39 +123,6 @@
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
 
-    const SeamlessMapModal = ({ onClose }) => {
-      const [isLoading, setIsLoading] = useState(true);
-
-      return (
-        <div className="fixed inset-0 z-[500] bg-slate-100 dark:bg-slate-900 flex flex-col animate-slide-in-up">
-          <div className="bg-slate-900 dark:bg-black text-white px-4 py-3 flex justify-between items-center z-20 shadow-lg border-b border-transparent dark:border-slate-800 transition-colors">
-             <div className="flex items-center gap-2">
-                <Icon name="map" className="w-5 h-5 text-teal-400" />
-                <h2 className="font-bold text-lg tracking-normal">广州地铁交互线路图</h2>
-             </div>
-             <button onClick={onClose} className="p-2 bg-slate-800 dark:bg-slate-900 rounded-full hover:bg-slate-700 transition-colors active:scale-95">
-               <Icon name="x" className="w-5 h-5" />
-             </button>
-          </div>
-          
-          <div className="flex-1 relative w-full h-full bg-slate-50 dark:bg-slate-800">
-            {isLoading && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 gap-3 z-10 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-sm transition-colors">
-                 <Icon name="loader-2" className="w-10 h-10 animate-spin text-teal-500 dark:text-teal-400" />
-                 <span className="font-bold text-sm tracking-widest">正在接入高清线路图引擎...</span>
-              </div>
-            )}
-            <iframe 
-              src="https://ipt.kopisee.com/canton/zh-cn/gzmtr-system-map" 
-              className="absolute inset-0 w-full h-full border-0 z-0"
-              onLoad={() => setIsLoading(false)}
-              title="GZ Metro System Map"
-            />
-          </div>
-        </div>
-      );
-    };
-
     function App() {
       const metroNetwork = {
         "1号线": { theme: "bg-yellow-50 dark:bg-[#1a1608] text-yellow-600 dark:text-yellow-500 border-yellow-400 dark:border-yellow-700/50", btnTheme: "bg-yellow-500 hover:bg-yellow-600 text-white", directions: [{ name: "往 广州东站", terminalFirst: "06:00", terminalLast: "22:55", stations: ["西塱", "坑口", "花地湾", "芳村", "黄沙", "长寿路", "陈家祠", "西门口", "公园前", "农讲所", "烈士陵园", "东山口", "杨箕", "体育西路", "体育中心", "广州东站"] }, { name: "往 西塱", terminalFirst: "06:10", terminalLast: "23:30", stations: ["广州东站", "体育中心", "体育西路", "杨箕", "东山口", "烈士陵园", "农讲所", "公园前", "西门口", "陈家祠", "长寿路", "黄沙", "芳村", "花地湾", "坑口", "西塱"] }] },
@@ -172,10 +139,9 @@
 
       const lines = Object.keys(metroNetwork);
 
-      const getPreciseFirstLast = (line, dirIndex, station) => {
-        const today = new Date();
-        const isWeekend = today.getDay() === 0 || today.getDay() === 6;
-        const dayLabel = isWeekend ? "节假日" : "工作日";
+      // --- 底层核心算法：获取绝对准确的发车毫秒数边界 ---
+      const getPreciseFirstLastRaw = (line, dirIndex, station, targetDate = new Date()) => {
+        const isWeekend = targetDate.getDay() === 0 || targetDate.getDay() === 6;
         const lineKey = line.replace("号线", "").replace("南海有轨", "有轨").replace("佛山", "佛");
         const dbKey = `${lineKey}-${dirIndex}`;
         
@@ -205,8 +171,7 @@
           "有轨1-1": { 0: {f: 390, l: 1365}, 13: {f: 420, l: 1395} }
         };
 
-        let fMins = 360;
-        let lMins = 1380;
+        let fMins = 360, lMins = 1380;
         const exactLine = exactTimetableDB[dbKey];
 
         if (exactLine && exactLine[stationIndex]) {
@@ -227,73 +192,104 @@
                 lMins = Math.round(exactLine[prevIdx].l + (exactLine[nextIdx].l - exactLine[prevIdx].l) * ratio);
             }
         }
+        return { fMins, lMins, isWeekend, dayLabel: isWeekend ? "节假日" : "工作日" };
+      };
 
+      const getPreciseFirstLast = (line, dirIndex, station) => {
+        const { fMins, lMins, isWeekend, dayLabel } = getPreciseFirstLastRaw(line, dirIndex, station, new Date());
         const formatTime = (m) => {
-            let h = Math.floor(m / 60);
-            let min = Math.floor(m % 60);
+            let h = Math.floor(m / 60), min = Math.floor(m % 60);
             if (h >= 24) h -= 24;
             return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
         };
-
         return { label: dayLabel, time: `${formatTime(fMins)} - ${formatTime(lMins)}`, isWeekend: isWeekend };
       };
 
+      // --- 【算法重构：严格时空截断引擎】 ---
+      // 1. 过了末班车绝对不会继续发车
+      // 2. 自动切换到次日首班车
       const generateTimetable = (line, directionIndex, station, baseDate) => {
-        const hours = baseDate.getHours();
-        const mins = baseDate.getMinutes();
-        const timeInMins = hours * 60 + mins;
-        const isPeak = (timeInMins >= 7.5*60 && timeInMins <= 9.5*60) || (timeInMins >= 17.5*60 && timeInMins <= 19.5*60);
-
-        const intervalData = {
+        const config = {
           "1号线": { peak: 2.5, offPeak: 4 }, "2号线": { peak: 2.5, offPeak: 4 }, "3号线": { peak: 2.0, offPeak: 3.5 },
           "7号线": { peak: 4.0, offPeak: 6.0 }, "8号线": { peak: 3.0, offPeak: 5.0 }, "11号线": { peak: 3.5, offPeak: 6.0 },
           "18号线": { peak: 7.5, offPeak: 9.0 }, "广佛线": { peak: 3.5, offPeak: 5.5 }, "佛山2号线": { peak: 5.5, offPeak: 8.0 }, "南海有轨1号线": { peak: 8.0, offPeak: 12.0 }
-        };
-        
-        const config = intervalData[line] || { peak: 4, offPeak: 6 };
-        const currentIntervalMins = isPeak ? config.peak : config.offPeak;
+        }[line] || { peak: 4, offPeak: 6 };
 
-        const stationsArray = metroNetwork[line].directions[directionIndex].stations;
-        const stationIndex = stationsArray.indexOf(station);
+        let baseTimeMs = baseDate.getTime();
         
-        const travelOffsetMins = stationIndex * 2.2;
+        let opDate = new Date(baseDate);
+        if (opDate.getHours() < 4) opDate.setDate(opDate.getDate() - 1);
+        opDate.setHours(0, 0, 0, 0); 
+        let opDayStartMs = opDate.getTime();
+
+        const generateDayScheduleMs = (dateOffsetDays) => {
+            const targetDate = new Date(opDayStartMs + dateOffsetDays * 86400000);
+            const { fMins, lMins } = getPreciseFirstLastRaw(line, directionIndex, station, targetDate);
+            
+            let schedule = [];
+            let currMins = fMins;
+            while (currMins <= lMins) {
+                schedule.push({ ms: targetDate.getTime() + currMins * 60000, dateOffsetDays });
+                let isPeak = (currMins >= 7.5*60 && currMins <= 9.5*60) || (currMins >= 17.5*60 && currMins <= 19.5*60);
+                currMins += isPeak ? config.peak : config.offPeak;
+            }
+            const exactLastMs = targetDate.getTime() + lMins * 60000;
+            if (schedule.length > 0) {
+                // 收口对齐官方精确末班车时间
+                if (exactLastMs - schedule[schedule.length - 1].ms <= 180000) {
+                    schedule[schedule.length - 1].ms = exactLastMs;
+                } else {
+                    schedule.push({ ms: exactLastMs, dateOffsetDays });
+                }
+                // 标记一头一尾
+                schedule[schedule.length - 1].isLastTrain = true;
+                schedule[0].isFirstTrain = true;
+            }
+            return schedule;
+        };
+
+        // 获取今天和明天的物理班次组合
+        let fullSchedule = [...generateDayScheduleMs(0), ...generateDayScheduleMs(1)];
+        // 严格截取此刻以后的车辆
+        let futureTrains = fullSchedule.filter(t => t.ms >= baseTimeMs - 60000); 
+        let selected = futureTrains.slice(0, 12);
+        
         let lineHash = 0;
         const hashTarget = `${line}-${directionIndex}`;
         for (let i = 0; i < hashTarget.length; i++) { lineHash = (lineHash << 5) - lineHash + hashTarget.charCodeAt(i); lineHash |= 0; }
-        const lineBaseOffset = Math.abs(lineHash) % currentIntervalMins; 
-        
-        const currentAbsoluteMins = hours * 60 + mins + (baseDate.getSeconds() / 60);
-        const effectiveTerminusTime = currentAbsoluteMins - travelOffsetMins - lineBaseOffset;
-        
-        let timeToNextDeparture = currentIntervalMins - (effectiveTerminusTime % currentIntervalMins);
-        if (timeToNextDeparture < 0) timeToNextDeparture += currentIntervalMins;
-        if (timeToNextDeparture >= currentIntervalMins) timeToNextDeparture -= currentIntervalMins;
 
-        let firstTrainWait = timeToNextDeparture;
-        if (firstTrainWait <= 0.1) firstTrainWait += currentIntervalMins; 
+        return selected.map((t, i) => {
+            let d = new Date(t.ms);
+            let h = d.getHours();
+            let m = d.getMinutes();
+            
+            let isExpress = false;
+            if (line === "18号线") {
+                if (Math.abs(lineHash + i) % 5 === 0 && i !== 0) isExpress = true;
+            }
+            
+            let localMins = h * 60 + m;
+            if (h < 4) localMins += 1440;
+            let isPeak = (localMins >= 7.5*60 && localMins <= 9.5*60) || (localMins >= 17.5*60 && localMins <= 19.5*60);
 
-        const times = [];
-        let accumulatedMins = firstTrainWait;
+            let label = i === 0 ? (isPeak ? "高峰进站" : "即将进站") : "后续";
+            
+            // 【精准拦截】：只对特定位置赋予“首班/末班”的高优标签
+            if (t.isLastTrain && t.dateOffsetDays === 0) {
+                label = "当日末班";
+            } else if (t.isFirstTrain && t.dateOffsetDays === 1) {
+                label = "次日首班";
+            }
 
-        for (let i = 0; i < 12; i++) {
-          const d = new Date(baseDate.getTime() + accumulatedMins * 60000);
-          let isExpress = false;
-          if (line === "18号线") {
-             const expressSeed = Math.abs(lineHash + stationIndex + i) % 5;
-             if (expressSeed === 0 && i !== 0) isExpress = true;
-          }
-
-          times.push({
-            id: `t_${i}`,
-            timeStr: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
-            label: i === 0 ? (isPeak ? "高峰进站" : "即将进站") : `后续`,
-            isExpress: isExpress,
-            dateObj: d
-          });
-
-          accumulatedMins += currentIntervalMins;
-        }
-        return times;
+            return {
+                id: `t_${i}_${t.ms}`,
+                timeStr: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
+                label: label,
+                isExpress: isExpress,
+                dateObj: d,
+                rawMs: t.ms
+            };
+        });
       };
 
       const CustomLineSelect = ({ legId, value, onChange }) => {
@@ -381,7 +377,8 @@
                           )}
                           <span className="font-mono text-[18px] font-bold leading-none tracking-tight">{t.timeStr}</span>
                         </div>
-                        <div className={`text-[10px] font-medium px-2 py-0.5 rounded-full inline-block transition-colors ${leg.targetTime === t.timeStr ? 'bg-black/20 text-white' : (pageIndex === 0 && page.indexOf(t) === 0) ? 'bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'}`}>
+                        {/* 根据新的“当日末班”和“次日首班”赋予独立高亮颜色 */}
+                        <div className={`text-[10px] font-medium px-2 py-0.5 rounded-full inline-block transition-colors ${leg.targetTime === t.timeStr ? 'bg-black/20 text-white' : (t.label === '当日末班' ? 'bg-red-500 text-white font-bold shadow-sm shadow-red-500/30' : t.label === '次日首班' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-bold' : (pageIndex === 0 && page.indexOf(t) === 0) ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-500 dark:text-blue-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400')}`}>
                           {t.label}
                         </div>
                       </div>
@@ -475,6 +472,7 @@
       const [toastMsg, setToastMsg] = useState("");
       
       const [isDarkMode, setIsDarkMode] = useState(false);
+      const [hasNotificationPermission, setHasNotificationPermission] = useState(false);
 
       useEffect(() => {
         const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -489,6 +487,39 @@
         else document.documentElement.classList.remove('dark');
       }, [isDarkMode]);
       
+      useEffect(() => {
+         if ("Notification" in window) {
+             setHasNotificationPermission(Notification.permission === "granted");
+         }
+      }, []);
+
+      const requestNotification = () => {
+         if (!("Notification" in window)) {
+             showToast("您的浏览器不支持系统通知");
+             return;
+         }
+         if (Notification.permission === "granted") {
+             showToast("已开启系统级提醒");
+             setHasNotificationPermission(true);
+         } else {
+             Notification.requestPermission().then(permission => {
+                 if (permission === "granted") {
+                     setHasNotificationPermission(true);
+                     showToast("成功开启系统级提醒！");
+                 } else {
+                     const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+                     const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+                     
+                     if (isIos && !isStandalone) {
+                         showToast("苹果手机请先点击底部「分享」-「添加到主屏幕」，再开启提醒！");
+                     } else {
+                         showToast("您拒绝了通知权限，无法在后台接收提醒");
+                     }
+                 }
+             });
+         }
+      };
+
       const [favorites, setFavorites] = useState([]);
       
       const initialLine = "18号线";
@@ -503,28 +534,25 @@
         }
       ]);
 
-      // --- 全局核心数据收敛 ---
       const sortedEvents = legs.map(leg => {
         const dirName = metroNetwork[leg.line].directions[leg.dirIndex].name;
+        const matchedTrain = leg.timetable.find(t => t.timeStr === leg.targetTime);
+        const targetMs = matchedTrain ? matchedTrain.rawMs : new Date().getTime();
+        
         return {
           id: leg.id, title: `${leg.station} 上车`, subtitle: `${leg.line} ${dirName} ${leg.targetIsExpress ? '(快车)' : ''}`,
-          time: leg.targetTime, lineThemeClass: metroNetwork[leg.line].btnTheme, isExpress: leg.targetIsExpress
+          time: leg.targetTime, lineThemeClass: metroNetwork[leg.line].btnTheme, isExpress: leg.targetIsExpress,
+          rawMs: targetMs
         }
-      }).sort((a, b) => a.time.localeCompare(b.time));
+      }).sort((a, b) => a.rawMs - b.rawMs); 
 
       let nextEventForPip = null;
       let actualPipDiffMs = 0;
 
       for (const ev of sortedEvents) {
-        const [h, m] = ev.time.split(':').map(Number);
-        const evDate = new Date(currentTime);
-        evDate.setHours(h, m, 0, 0);
-        if (currentTime.getHours() > 12 && h < 12 && evDate < currentTime) {
-            evDate.setDate(evDate.getDate() + 1);
-        }
-        if (evDate > currentTime) { 
+        if (ev.rawMs > currentTime.getTime()) { 
             nextEventForPip = ev; 
-            actualPipDiffMs = evDate - currentTime;
+            actualPipDiffMs = ev.rawMs - currentTime.getTime();
             break; 
         }
       }
@@ -533,16 +561,73 @@
       const sLeftPip = Math.floor((actualPipDiffMs % 60000) / 1000);
       const currentSubtitle = nextEventForPip ? nextEventForPip.subtitle : "行程结束";
 
-      // 主时钟循环
+      const playDing = () => {
+         try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            const ctx = new AudioContext();
+            
+            const playNote = (freq, startTime) => {
+               const osc = ctx.createOscillator();
+               const gain = ctx.createGain();
+               osc.type = 'sine';
+               osc.frequency.setValueAtTime(freq, ctx.currentTime + startTime);
+               gain.gain.setValueAtTime(0, ctx.currentTime + startTime);
+               gain.gain.linearRampToValueAtTime(0.5, ctx.currentTime + startTime + 0.05);
+               gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + startTime + 0.8);
+               osc.connect(gain);
+               gain.connect(ctx.destination);
+               osc.start(ctx.currentTime + startTime);
+               osc.stop(ctx.currentTime + startTime + 1);
+            };
+            
+            playNote(880, 0); 
+            playNote(1108.73, 0.2); 
+         } catch (e) { console.warn("Audio play failed", e); }
+      };
+
+      const fireSystemNotification = (title, body) => {
+          if ("Notification" in window && Notification.permission === "granted") {
+              new Notification(title, {
+                  body: body,
+                  icon: 'https://cdn-icons-png.flaticon.com/512/3033/3033143.png', 
+                  requireInteraction: true
+              });
+          }
+      };
+
+      const notifiedEvents = useRef(new Set());
+
       useEffect(() => {
         let timer;
         if (appState === 'countdown') {
-          timer = setInterval(() => setCurrentTime(new Date()), 1000);
+          timer = setInterval(() => {
+            const now = new Date();
+            setCurrentTime(now);
+            
+            if (nextEventForPip && actualPipDiffMs > 0) {
+               const is1Min = mLeftPip === 1 && sLeftPip === 0;
+               const is0Min = mLeftPip === 0 && sLeftPip === 0;
+               
+               if (is1Min && !notifiedEvents.current.has(`${nextEventForPip.id}_1m`)) {
+                   playDing();
+                   fireSystemNotification("🚇 列车即将进站", `${nextEventForPip.title} 还有 1 分钟，请准备乘车！`);
+                   notifiedEvents.current.add(`${nextEventForPip.id}_1m`);
+               }
+               
+               if (is0Min && !notifiedEvents.current.has(`${nextEventForPip.id}_0m`)) {
+                   playDing();
+                   fireSystemNotification("🚨 正在进站", `${nextEventForPip.subtitle}，正在进站，请先下后上！`);
+                   notifiedEvents.current.add(`${nextEventForPip.id}_0m`);
+               }
+            }
+          }, 1000);
+        } else {
+           notifiedEvents.current.clear();
         }
         return () => { if (timer) clearInterval(timer); };
-      }, [appState]);
+      }, [appState, mLeftPip, sLeftPip, nextEventForPip, actualPipDiffMs]);
 
-      // 动态网页标题，在后台也能显示倒计时
       useEffect(() => {
         if (appState === 'countdown' && nextEventForPip && actualPipDiffMs > 0) {
            document.title = `⏳ ${mLeftPip}:${String(sLeftPip).padStart(2,'0')} - MetroRush`;
@@ -762,109 +847,22 @@
 
       const startCountdown = () => {
         if (legs.every(leg => leg.targetTime !== "")) {
+          try {
+             const AudioContext = window.AudioContext || window.webkitAudioContext;
+             if (AudioContext) {
+                const ctx = new AudioContext();
+                ctx.resume(); 
+             }
+          } catch(e) {}
+          
+          if (!hasNotificationPermission && "Notification" in window) {
+              requestNotification();
+          }
+
           setCurrentTime(new Date()); 
           setAppState('countdown');
-        } else showToast("请为所有行程选择班次");
-      };
-
-      // --- 【终极纯血悬浮引擎】 彻底抛弃应用内假悬浮，采用黑科技混流注入 ---
-      const canvasRef = useRef(null);
-      const videoRef = useRef(null);
-      const [isPipActive, setIsPipActive] = useState(false);
-
-      const latestDataRef = useRef({ appState, nextEventForPip, mLeftPip, sLeftPip });
-      useEffect(() => {
-        latestDataRef.current = { appState, nextEventForPip, mLeftPip, sLeftPip };
-      }, [appState, nextEventForPip, mLeftPip, sLeftPip]);
-
-      // 强力渲染循环，30fps，维持视频流不断流
-      useEffect(() => {
-        if (appState !== 'countdown' || !canvasRef.current) return;
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        
-        let timer = setInterval(() => {
-          const { appState: currentAppState, nextEventForPip: ev, mLeftPip: m, sLeftPip: s } = latestDataRef.current;
-
-          if (currentAppState === 'countdown') {
-            ctx.fillStyle = '#020617'; 
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            if (ev) {
-              ctx.fillStyle = '#38bdf8'; 
-              ctx.font = 'bold 24px -apple-system, sans-serif';
-              ctx.textAlign = 'center';
-              ctx.fillText(ev.subtitle, canvas.width/2, 45);
-
-              ctx.fillStyle = m < 2 ? '#ef4444' : '#ffffff'; 
-              ctx.font = 'bold 88px monospace';
-              ctx.fillText(`${m}:${String(s).padStart(2, '0')}`, canvas.width/2, 135);
-
-              ctx.fillStyle = '#94a3b8';
-              ctx.font = '22px -apple-system, sans-serif';
-              ctx.fillText(ev.title, canvas.width/2, 180);
-            } else {
-              ctx.fillStyle = '#ffffff';
-              ctx.font = 'bold 36px -apple-system, sans-serif';
-              ctx.textAlign = 'center';
-              ctx.fillText('行程圆满结束', canvas.width/2, canvas.height/2 + 10);
-            }
-          }
-        }, 33); // 维持在 30fps
-
-        return () => clearInterval(timer);
-      }, [appState]);
-
-      // 纯粹的跨应用系统级画中画 (并加入开源社区音频轨注入 Hack 以突破限制)
-      const togglePip = async () => {
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        
-        if (!document.pictureInPictureEnabled) {
-           showToast("系统级画中画在此设备/浏览器中被禁用");
-           return;
-        }
-
-        if (!canvas.captureStream) {
-           showToast("当前内核不支持视频流转化 (如 iOS Safari)");
-           return;
-        }
-
-        try {
-          if (document.pictureInPictureElement === video) {
-            await document.exitPictureInPicture();
-            setIsPipActive(false);
-          } else {
-            if (!video.srcObject) {
-               const stream = canvas.captureStream(30);
-
-               // 【黑科技：静默音频轨注入】骗过系统沙盒，让它以为这是一个正经的媒体通话视频
-               try {
-                  const AudioContext = window.AudioContext || window.webkitAudioContext;
-                  if (AudioContext) {
-                      const ctx = new AudioContext();
-                      const oscillator = ctx.createOscillator();
-                      const dst = ctx.createMediaStreamDestination();
-                      oscillator.connect(dst);
-                      oscillator.start();
-                      const audioTrack = dst.stream.getAudioTracks()[0];
-                      if (audioTrack) {
-                          stream.addTrack(audioTrack);
-                      }
-                  }
-               } catch (audioErr) {
-                  console.warn("静默音频注入失败", audioErr);
-               }
-
-               video.srcObject = stream;
-            }
-            await video.play();
-            await video.requestPictureInPicture();
-            setIsPipActive(true);
-          }
-        } catch (err) {
-          console.error("PiP Error:", err);
-          showToast("系统严格拦截了跨应用悬浮请求（或您的设备底层暂不支持）");
+        } else {
+          showToast("请为所有行程选择班次");
         }
       };
 
@@ -893,6 +891,9 @@
                  <div className="flex items-center gap-1.5">
                    <button onClick={() => setIsDarkMode(!isDarkMode)} className="flex items-center justify-center p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                       <Icon name={isDarkMode ? "sun" : "moon"} className="w-5 h-5" />
+                   </button>
+                   <button onClick={requestNotification} className={`flex items-center justify-center p-2 rounded-full transition-colors ${hasNotificationPermission ? 'text-teal-500 hover:bg-teal-50 dark:hover:bg-teal-900/20' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                      <Icon name={hasNotificationPermission ? "bell-ring" : "bell-off"} className="w-4 h-4" />
                    </button>
                  </div>
                  
@@ -991,7 +992,8 @@
                   <button onClick={startCountdown} className="w-full mt-6 py-4 bg-slate-900 dark:bg-slate-100 hover:bg-black dark:hover:bg-white text-white dark:text-slate-900 rounded-2xl flex items-center justify-center gap-2 font-bold text-lg transition-transform active:scale-[0.98] shadow-xl">
                     <Icon name="play" className="w-5 h-5 fill-current" /> 启动 MetroRush
                   </button>
-                  <div className="text-center text-[10px] font-mono tracking-tighter text-slate-400 dark:text-slate-600 opacity-60 pt-2 pb-4">v1.9.9</div>
+                  {/* 【更新字距与版本号】 */}
+                  <div className="text-center text-[10px] font-mono tracking-tighter text-slate-400 dark:text-slate-600 opacity-60 pt-2 pb-4">v1.9.12</div>
                 </div>
               </div>
 
@@ -1058,10 +1060,6 @@
       return (
         <div className="min-h-screen bg-slate-100 dark:bg-[#0a0f18] p-4 md:p-8 font-sans flex flex-col items-center justify-start pt-10 relative overflow-hidden transition-colors duration-500">
           
-          {/* 【修复核心：画中画挂载器】将画布和视频隐藏在屏幕之外，彻底去除应用内的虚假悬浮窗 */}
-          <canvas ref={canvasRef} width="400" height="200" className="fixed -top-[1000px] left-0 pointer-events-none -z-50" style={{ width: '400px', height: '200px' }}></canvas>
-          <video ref={videoRef} autoPlay playsInline muted className="fixed -top-[1000px] left-0 pointer-events-none -z-50" style={{ width: '10px', height: '10px' }}></video>
-
           {isMapLoading && (
             <div className="fixed inset-0 z-[500] bg-slate-900/90 backdrop-blur-md flex flex-col items-center justify-center text-white animate-fade-in">
                <Icon name="loader-2" className="w-12 h-12 animate-spin mb-4 text-teal-400" />
@@ -1079,12 +1077,6 @@
                 <h1 className="text-xl font-bold tracking-wider font-sans">MetroRush 监控</h1>
               </div>
               <div className="flex items-center gap-2">
-                 <button 
-                   onClick={togglePip}
-                   className={`flex items-center gap-1 text-sm backdrop-blur px-3 py-2 rounded-full transition-colors font-sans tracking-normal border shadow-sm ${isPipActive ? 'bg-teal-500 text-white border-teal-600' : 'bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700'}`}
-                 >
-                   <Icon name="picture-in-picture" className="w-4 h-4" /> 悬浮
-                 </button>
                  <button onClick={() => setAppState('setup')} className="flex items-center gap-1 text-sm bg-white/80 dark:bg-slate-800/80 backdrop-blur px-4 py-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm font-sans tracking-normal">
                    <Icon name="settings" className="w-4 h-4" /> 调整
                  </button>
