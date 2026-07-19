@@ -156,6 +156,50 @@
       );
     };
 
+    // --- 【修复核心】将应用内悬浮窗剥离到全局渲染层外，彻底解决频繁重绘导致的闪烁 ---
+    const InAppPipWindow = ({ timeText, subtitle, onClose }) => {
+      // 这里的 state 在组件不被销毁的情况下是稳定的，不会再因为 App 更新时间而复位
+      const [pos, setPos] = useState({ x: window.innerWidth - 180, y: 80 });
+      const [isDragging, setIsDragging] = useState(false);
+      const startPos = useRef({ x: 0, y: 0 });
+
+      const handleTouchStart = (e) => {
+        setIsDragging(true);
+        startPos.current = {
+          x: e.touches[0].clientX - pos.x,
+          y: e.touches[0].clientY - pos.y
+        };
+      };
+
+      const handleTouchMove = (e) => {
+        if (!isDragging) return;
+        e.preventDefault(); 
+        let newX = e.touches[0].clientX - startPos.current.x;
+        let newY = e.touches[0].clientY - startPos.current.y;
+        
+        newX = Math.max(10, Math.min(window.innerWidth - 170, newX));
+        newY = Math.max(10, Math.min(window.innerHeight - 90, newY));
+        
+        setPos({ x: newX, y: newY });
+      };
+
+      const handleTouchEnd = () => setIsDragging(false);
+
+      return (
+        <div 
+          className="fixed z-[9999] bg-slate-900/95 dark:bg-slate-800/95 backdrop-blur-xl border border-slate-700/50 shadow-2xl rounded-2xl flex flex-col items-center justify-center p-3 select-none touch-none animate-fade-in"
+          style={{ left: pos.x, top: pos.y, width: '160px', height: '80px', transition: isDragging ? 'none' : 'box-shadow 0.3s' }}
+          onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
+        >
+          <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="absolute -top-2 -right-2 bg-slate-700 text-white rounded-full p-1 shadow-md hover:bg-red-500 transition-colors">
+             <Icon name="x" className="w-3 h-3" />
+          </button>
+          <div className="text-[10px] text-teal-400 font-bold tracking-wider mb-1 opacity-90">{subtitle}</div>
+          <div className="font-mono text-3xl font-black text-white tracking-tighter">{timeText}</div>
+        </div>
+      );
+    };
+
     function App() {
       const metroNetwork = {
         "1号线": { theme: "bg-yellow-50 dark:bg-[#1a1608] text-yellow-600 dark:text-yellow-500 border-yellow-400 dark:border-yellow-700/50", btnTheme: "bg-yellow-500 hover:bg-yellow-600 text-white", directions: [{ name: "往 广州东站", terminalFirst: "06:00", terminalLast: "22:55", stations: ["西塱", "坑口", "花地湾", "芳村", "黄沙", "长寿路", "陈家祠", "西门口", "公园前", "农讲所", "烈士陵园", "东山口", "杨箕", "体育西路", "体育中心", "广州东站"] }, { name: "往 西塱", terminalFirst: "06:10", terminalLast: "23:30", stations: ["广州东站", "体育中心", "体育西路", "杨箕", "东山口", "烈士陵园", "农讲所", "公园前", "西门口", "陈家祠", "长寿路", "黄沙", "芳村", "花地湾", "坑口", "西塱"] }] },
@@ -357,6 +401,7 @@
               <label className="block text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 opacity-70 text-slate-600 dark:text-slate-400">
                 <Icon name="clock" className="w-3 h-3" /> 选择时间
               </label>
+              
               {firstLastData && (
                  <span className={`text-[11px] font-mono font-bold tracking-tight transition-colors ${firstLastData.isWeekend ? 'text-purple-600 dark:text-purple-400 opacity-90' : 'text-slate-500 dark:text-slate-400 opacity-80'}`}>
                    {firstLastData.label} {firstLastData.time}
@@ -426,26 +471,6 @@
           if (offset > maxOffset / 2) { setOffset(maxOffset); prevOffset.current = maxOffset; } 
           else { setOffset(0); prevOffset.current = 0; }
         };
-        
-        const handleMouseDown = (e) => {
-          if (e.target.closest('.no-swipe') || e.target.closest('button')) return;
-          startX.current = e.clientX;
-          setIsDragging(true);
-        };
-        const handleMouseMove = (e) => {
-          if (!isDragging) return;
-          const deltaX = e.clientX - startX.current;
-          let newOffset = prevOffset.current + deltaX;
-          if (newOffset < 0) newOffset = 0;
-          if (newOffset > maxOffset + 30) newOffset = maxOffset + 30;
-          setOffset(newOffset);
-        };
-        const handleMouseUp = () => {
-          if (!isDragging) return;
-          setIsDragging(false);
-          if (offset > maxOffset / 2) { setOffset(maxOffset); prevOffset.current = maxOffset; } 
-          else { setOffset(0); prevOffset.current = 0; }
-        };
 
         return (
           <div className="relative w-full z-10 overflow-hidden rounded-2xl bg-slate-200 dark:bg-slate-700 border border-slate-200 dark:border-slate-700 shadow-sm transition-colors">
@@ -476,7 +501,6 @@
               className="relative w-full h-full z-10 bg-white dark:bg-slate-900 rounded-2xl transition-colors"
               style={{ transform: `translateX(${offset}px)`, transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' }}
               onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
-              onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
             >
                 <div className={`p-4 md:p-5 w-full h-full rounded-2xl transition-colors ${activeTheme}`}>
                     {children}
@@ -523,11 +547,57 @@
         }
       ]);
 
+      // 实时获取下一班车数据供悬浮窗使用
+      const eventsList = legs.map(leg => {
+        const dirName = metroNetwork[leg.line].directions[leg.dirIndex].name;
+        return {
+          id: leg.id, title: `${leg.station} 上车`, subtitle: `${leg.line} ${dirName} ${leg.targetIsExpress ? '(快车)' : ''}`,
+          time: leg.targetTime, lineThemeClass: metroNetwork[leg.line].btnTheme, isExpress: leg.targetIsExpress
+        }
+      }).sort((a, b) => a.time.localeCompare(b.time));
+
+      let nextEventForPip = null;
+      for (const ev of eventsList) {
+        const [h, m] = ev.time.split(':').map(Number);
+        const evDate = new Date(currentTime);
+        evDate.setHours(h, m, 0, 0);
+        if (currentTime.getHours() > 12 && h < 12 && evDate < currentTime) evDate.setDate(evDate.getDate() + 1);
+        if (evDate > currentTime) { nextEventForPip = ev; break; }
+      }
+
+      const pipTimeDiffMs = nextEventForPip ? (new Date().setHours(nextEventForPip.time.split(':')[0], nextEventForPip.time.split(':')[1], 0, 0) - new Date()) : 0;
+      let actualPipDiffMs = pipTimeDiffMs;
+      // 修正跨天
+      if (actualPipDiffMs < -43200000) actualPipDiffMs += 86400000;
+      
+      const mLeftPip = Math.floor(actualPipDiffMs / 60000);
+      const sLeftPip = Math.floor((actualPipDiffMs % 60000) / 1000);
+      const currentCountdownText = nextEventForPip && actualPipDiffMs > 0 ? `${mLeftPip}:${String(sLeftPip).padStart(2,'0')}` : "00:00";
+      const currentSubtitle = nextEventForPip ? nextEventForPip.subtitle : "行程结束";
+
+      // 修复黑科技：动态网页标题倒计时
       useEffect(() => {
         let timer;
-        if (appState === 'countdown') timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        if (appState === 'countdown') {
+          timer = setInterval(() => {
+            setCurrentTime(new Date());
+          }, 1000);
+        } else {
+          document.title = 'MetroRush';
+        }
         return () => { if (timer) clearInterval(timer); };
       }, [appState]);
+
+      useEffect(() => {
+         if (appState === 'countdown') {
+            if(nextEventForPip && actualPipDiffMs > 0){
+               document.title = `⏳ ${mLeftPip}:${String(sLeftPip).padStart(2,'0')} - MetroRush`;
+            } else {
+               document.title = 'MetroRush';
+            }
+         }
+      }, [currentTime, appState]);
+
 
       const showToast = (msg) => {
         setToastMsg(msg);
@@ -745,6 +815,82 @@
         } else showToast("请为所有行程选择班次");
       };
 
+      // --- 全机型自适应双轨悬浮引擎逻辑 ---
+      const canvasRef = useRef(null);
+      const videoRef = useRef(null);
+      const [isPipActive, setIsPipActive] = useState(false);
+      const [showInAppPip, setShowInAppPip] = useState(false);
+
+      // 使用 requestAnimationFrame 彻底解决 Canvas 画动画帧的闪烁问题
+      const latestDataRef = useRef({ currentTime, appState, nextEventForPip, mLeftPip, sLeftPip });
+      useEffect(() => {
+        latestDataRef.current = { currentTime, appState, nextEventForPip, mLeftPip, sLeftPip };
+      }, [currentTime, appState, nextEventForPip, mLeftPip, sLeftPip]);
+
+      useEffect(() => {
+        if (!canvasRef.current) return;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        let animationId;
+
+        const drawLoop = () => {
+          const { appState, nextEventForPip, mLeftPip, sLeftPip } = latestDataRef.current;
+          
+          if (appState === 'countdown') {
+            ctx.fillStyle = '#020617'; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (nextEventForPip) {
+              ctx.fillStyle = '#38bdf8'; 
+              ctx.font = 'bold 24px -apple-system, sans-serif';
+              ctx.textAlign = 'center';
+              ctx.fillText(nextEventForPip.subtitle, canvas.width/2, 45);
+
+              ctx.fillStyle = mLeftPip < 2 ? '#ef4444' : '#ffffff'; 
+              ctx.font = 'bold 88px monospace';
+              ctx.fillText(`${mLeftPip}:${String(sLeftPip).padStart(2, '0')}`, canvas.width/2, 135);
+
+              ctx.fillStyle = '#94a3b8';
+              ctx.font = '22px -apple-system, sans-serif';
+              ctx.fillText(nextEventForPip.title, canvas.width/2, 180);
+            } else {
+              ctx.fillStyle = '#ffffff';
+              ctx.font = 'bold 36px -apple-system, sans-serif';
+              ctx.textAlign = 'center';
+              ctx.fillText('行程圆满结束', canvas.width/2, canvas.height/2 + 10);
+            }
+          }
+          animationId = requestAnimationFrame(drawLoop);
+        };
+        drawLoop();
+        return () => cancelAnimationFrame(animationId);
+      }, []);
+
+      const togglePip = async () => {
+        if (document.pictureInPictureEnabled && videoRef.current && canvasRef.current && canvasRef.current.captureStream) {
+          try {
+            if (document.pictureInPictureElement) {
+              await document.exitPictureInPicture();
+              setIsPipActive(false);
+            } else {
+              if (!videoRef.current.srcObject) {
+                 videoRef.current.srcObject = canvasRef.current.captureStream(30);
+              }
+              await videoRef.current.play();
+              await videoRef.current.requestPictureInPicture();
+              setIsPipActive(true);
+            }
+            return; // 原生画中画成功，跳出
+          } catch (err) {
+            console.warn("系统限制了原生画中画，自动降级为内嵌悬浮窗");
+            // 静默失败，继续往下走降级逻辑
+          }
+        }
+        
+        // 智能降级：全机型通用的纯前端应用内悬浮窗
+        setShowInAppPip(!showInAppPip);
+      };
+
       if (appState === 'setup') {
         return (
           <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-800 dark:text-slate-200 flex flex-col items-center justify-start relative transition-colors duration-300">
@@ -868,8 +1014,7 @@
                   <button onClick={startCountdown} className="w-full mt-6 py-4 bg-slate-900 dark:bg-slate-100 hover:bg-black dark:hover:bg-white text-white dark:text-slate-900 rounded-2xl flex items-center justify-center gap-2 font-bold text-lg transition-transform active:scale-[0.98] shadow-xl">
                     <Icon name="play" className="w-5 h-5 fill-current" /> 启动 MetroRush
                   </button>
-                  {/* 【调整字距更新】使用 tracking-tighter 收紧 */}
-                  <div className="text-center text-[10px] font-mono tracking-tighter text-slate-400 dark:text-slate-600 opacity-60 pt-2 pb-4">v1.9.0</div>
+                  <div className="text-center text-[10px] font-mono tracking-tighter text-slate-400 dark:text-slate-600 opacity-60 pt-2 pb-4">v1.9.4</div>
                 </div>
               </div>
 
@@ -932,37 +1077,20 @@
         );
       }
 
-      // --- 监控页面渲染 ---
-      const events = legs.map(leg => {
-        const dirName = metroNetwork[leg.line].directions[leg.dirIndex].name;
-        return {
-          id: leg.id, title: `${leg.station} 上车`, subtitle: `${leg.line} ${dirName} ${leg.targetIsExpress ? '(快车)' : ''}`,
-          time: leg.targetTime, lineThemeClass: metroNetwork[leg.line].btnTheme, isExpress: leg.targetIsExpress
-        }
-      });
-      const sortedEvents = [...events].sort((a, b) => a.time.localeCompare(b.time));
-      
-      const getEventDate = (timeStr) => {
-        const [hours, minutes] = timeStr.split(':').map(Number);
-        const date = new Date(currentTime);
-        date.setHours(hours, minutes, 0, 0);
-        if (currentTime.getHours() > 12 && hours < 12 && date < currentTime) date.setDate(date.getDate() + 1);
-        return date;
-      };
-      
-      let nextEvent = null, timeDiffMs = 0;
-      for (const ev of sortedEvents) {
-        const evDate = getEventDate(ev.time);
-        if (evDate > currentTime) {
-          nextEvent = ev; timeDiffMs = evDate - currentTime; break;
-        }
-      }
-      const minutesLeft = Math.floor(timeDiffMs / 60000);
-      const secondsLeft = Math.floor((timeDiffMs % 60000) / 1000);
-
       return (
         <div className="min-h-screen bg-slate-100 dark:bg-[#0a0f18] p-4 md:p-8 font-sans flex flex-col items-center justify-start pt-10 relative overflow-hidden transition-colors duration-500">
           
+          <canvas ref={canvasRef} width="400" height="200" className="hidden"></canvas>
+          <video ref={videoRef} muted playsInline className="hidden"></video>
+
+          {showInAppPip && (
+            <InAppPipWindow 
+              timeText={currentCountdownText} 
+              subtitle={currentSubtitle} 
+              onClose={() => setShowInAppPip(false)} 
+            />
+          )}
+
           {isMapLoading && (
             <div className="fixed inset-0 z-[500] bg-slate-900/90 backdrop-blur-md flex flex-col items-center justify-center text-white animate-fade-in">
                <Icon name="loader-2" className="w-12 h-12 animate-spin mb-4 text-teal-400" />
@@ -980,41 +1108,35 @@
                 <h1 className="text-xl font-bold tracking-wider font-sans">MetroRush 监控</h1>
               </div>
               <div className="flex items-center gap-2">
-                 <a 
-                   href="https://ipt.kopisee.com/canton/zh-cn/gzmtr-system-map" 
-                   target="_blank" 
-                   rel="noopener noreferrer" 
-                   onClick={() => {
-                     setIsMapLoading(true);
-                     setTimeout(() => setIsMapLoading(false), 2500); 
-                   }}
-                   className="flex items-center gap-1 text-sm bg-white/80 dark:bg-slate-800/80 backdrop-blur px-3 py-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm font-sans tracking-normal cursor-pointer"
+                 <button 
+                   onClick={togglePip}
+                   className={`flex items-center gap-1 text-sm backdrop-blur px-3 py-2 rounded-full transition-colors font-sans tracking-normal border shadow-sm ${isPipActive || showInAppPip ? 'bg-teal-500 text-white border-teal-600' : 'bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700'}`}
                  >
-                   <Icon name="map" className="w-4 h-4" />
-                 </a>
+                   <Icon name="picture-in-picture" className="w-4 h-4" /> 悬浮
+                 </button>
                  <button onClick={() => setAppState('setup')} className="flex items-center gap-1 text-sm bg-white/80 dark:bg-slate-800/80 backdrop-blur px-4 py-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm font-sans tracking-normal">
-                   <Icon name="settings" className="w-4 h-4" /> 调整行程
+                   <Icon name="settings" className="w-4 h-4" /> 调整
                  </button>
               </div>
             </div>
 
-            <div className={`rounded-3xl shadow-2xl p-8 mb-8 text-center relative overflow-hidden ${nextEvent ? nextEvent.lineThemeClass : 'bg-slate-800'} transition-colors duration-500`}>
+            <div className={`rounded-3xl shadow-2xl p-8 mb-8 text-center relative overflow-hidden ${nextEventForPip ? nextEventForPip.lineThemeClass : 'bg-slate-800'} transition-colors duration-500`}>
               <Icon name="clock" className="absolute -right-12 -top-12 w-64 h-64 text-white opacity-[0.07]" />
-              {nextEvent ? (
+              {nextEventForPip ? (
                 <div className="relative z-10">
                   <div className="inline-flex flex-col items-center gap-1 mb-4">
                      <span className="bg-black/20 text-white/90 px-3 py-1 rounded-full text-sm backdrop-blur-md flex items-center gap-1.5 shadow-inner">
-                       <Icon name="navigation" className="w-3.5 h-3.5" /> {nextEvent.subtitle}
+                       <Icon name="navigation" className="w-3.5 h-3.5" /> {currentSubtitle}
                      </span>
-                     <h2 className="text-2xl font-bold text-white mt-2 drop-shadow-md font-sans tracking-normal">{nextEvent.title}</h2>
+                     <h2 className="text-2xl font-bold text-white mt-2 drop-shadow-md font-sans tracking-normal">{nextEventForPip.title}</h2>
                   </div>
                   <div className="flex items-baseline justify-center gap-2 mt-2 mb-2">
-                    <span className="text-8xl font-black tracking-tighter tabular-nums drop-shadow-lg text-white">{minutesLeft}</span>
+                    <span className="text-8xl font-black tracking-tighter tabular-nums drop-shadow-lg text-white">{mLeftPip}</span>
                     <span className="text-2xl font-bold text-white/70">分</span>
-                    <span className="text-6xl font-bold tracking-tighter tabular-nums text-white/90 ml-2 w-20 text-left drop-shadow-md">{String(secondsLeft).padStart(2, '0')}</span>
+                    <span className="text-6xl font-bold tracking-tighter tabular-nums text-white/90 ml-2 w-20 text-left drop-shadow-md">{String(sLeftPip).padStart(2, '0')}</span>
                     <span className="text-xl font-bold text-white/70">秒</span>
                   </div>
-                  {minutesLeft < 2 && (
+                  {mLeftPip < 2 && (
                     <div className="mt-6 inline-flex items-center gap-2 bg-red-500 dark:bg-red-600 text-white px-5 py-2.5 rounded-full font-bold text-sm shadow-[0_0_20px_rgba(239,68,68,0.5)] animate-pulse">
                       <Icon name="alert-circle" className="w-5 h-5" />列车即将进站，请准备乘车
                     </div>
@@ -1035,7 +1157,7 @@
                 {sortedEvents.map((ev, index) => {
                   const evDate = getEventDate(ev.time);
                   const isPast = evDate <= currentTime;
-                  const isNext = nextEvent && ev.id === nextEvent.id;
+                  const isNext = nextEventForPip && ev.id === nextEventForPip.id;
                   return (
                     <div key={ev.id} className="relative z-10 flex items-start gap-5 pb-10 last:pb-0 group">
                       <div className="w-16 text-right pt-0.5 shrink-0">
